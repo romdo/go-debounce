@@ -14,9 +14,9 @@ jobs:
       - uses: actions/cache@v3
         with:
           path: ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          key: ${{ runner.os }}-golangcilint-${{ hashFiles('**/Makefile') }}
           restore-keys: |
-            ${{ runner.os }}-go-
+            ${{ runner.os }}-golangcilint-
       - name: Check if mods are tidy
         run: make lint
         env:
