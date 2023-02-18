@@ -91,3 +91,13 @@ jobs:
         run: make test
         env:
           TESTARGS: -max-retries=2
+
+  release-please:
+    needs: [lint, tidy, test]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: google-github-actions/release-please-action@v3
+        id: release-please
+        with:
+          command: manifest
