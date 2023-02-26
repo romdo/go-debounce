@@ -20,82 +20,86 @@ func TestNewMutable(t *testing.T) {
 	}{
 		{
 			name: "one trigger",
-			wait: 20 * time.Millisecond,
+			wait: 200 * time.Millisecond,
 			calls: []testOp{
-				{delay: 10 * time.Millisecond},
+				{delay: 100 * time.Millisecond},
 			},
 			wantTriggers: map[time.Duration]int{
-				5 * time.Millisecond:   0,
-				15 * time.Millisecond:  0,
-				25 * time.Millisecond:  0,
-				35 * time.Millisecond:  1,
-				150 * time.Millisecond: 1,
+				50 * time.Millisecond:  0,
+				150 * time.Millisecond: 0,
+				250 * time.Millisecond: 0,
+				350 * time.Millisecond: 1,
+				// still 1 at at the end
+				850 * time.Millisecond: 1,
 			},
 			wantFuncs: []int{0},
 		},
 		{
 			name: "two separate triggers",
-			wait: 20 * time.Millisecond,
+			wait: 200 * time.Millisecond,
 			calls: []testOp{
-				{delay: 10 * time.Millisecond},
-				{delay: 40 * time.Millisecond},
+				{delay: 100 * time.Millisecond},
+				{delay: 400 * time.Millisecond},
 			},
 			wantTriggers: map[time.Duration]int{
-				5 * time.Millisecond:  0,
-				15 * time.Millisecond: 0,
-				25 * time.Millisecond: 0,
-				// from call at 10ms (+20ms wait = 30ms)
-				35 * time.Millisecond: 1,
-				55 * time.Millisecond: 1,
-				// from call at 40ms (+20ms wait = 60ms)
-				65 * time.Millisecond:  2,
-				150 * time.Millisecond: 2,
+				50 * time.Millisecond:  0,
+				150 * time.Millisecond: 0,
+				250 * time.Millisecond: 0,
+				// from call at 100ms (+200ms wait = 300ms)
+				350 * time.Millisecond: 1,
+				550 * time.Millisecond: 1,
+				// from call at 400ms (+200ms wait = 600ms)
+				650 * time.Millisecond: 2,
+				// still 2 at at the end
+				1150 * time.Millisecond: 2,
 			},
 			wantFuncs: []int{0, 1},
 		},
 		{
 			name: "many calls, one cancel, two triggers",
-			wait: 20 * time.Millisecond,
+			wait: 200 * time.Millisecond,
 			calls: []testOp{
-				{delay: 5 * time.Millisecond},
-				{delay: 5 * time.Millisecond},
-				{delay: 10 * time.Millisecond}, // trigger 1
-				{delay: 35 * time.Millisecond},
-				{delay: 40 * time.Millisecond},
-				{delay: 50 * time.Millisecond, cancel: true},
-				{delay: 80 * time.Millisecond},
-				{delay: 90 * time.Millisecond},
-				{delay: 100 * time.Millisecond}, // trigger 2
+				{delay: 50 * time.Millisecond},
+				{delay: 50 * time.Millisecond},
+				{delay: 100 * time.Millisecond}, // trigger 1
+				{delay: 350 * time.Millisecond},
+				{delay: 400 * time.Millisecond},
+				{delay: 500 * time.Millisecond, cancel: true},
+				{delay: 800 * time.Millisecond},
+				{delay: 900 * time.Millisecond},
+				{delay: 1000 * time.Millisecond}, // trigger 2
 			},
 			wantTriggers: map[time.Duration]int{
-				5 * time.Millisecond:  0,
-				15 * time.Millisecond: 0,
-				25 * time.Millisecond: 0,
-				// from call at 10ms (+20ms wait = 30ms)
-				35 * time.Millisecond:  1,
-				115 * time.Millisecond: 1,
-				// from call at 100ms (+20ms wait = 120ms)
-				125 * time.Millisecond: 2,
-				150 * time.Millisecond: 2,
+				50 * time.Millisecond:  0,
+				150 * time.Millisecond: 0,
+				250 * time.Millisecond: 0,
+				// from call at 100ms (+200ms wait = 300ms)
+				350 * time.Millisecond:  1,
+				1150 * time.Millisecond: 1,
+				// from call at 1000ms (+200ms wait = 1200ms)
+				1250 * time.Millisecond: 2,
+				// still 2 at at the end
+				1750 * time.Millisecond: 2,
 			},
 			wantFuncs: []int{2, 8},
 		},
 		{
 			name: "many triggers within wait time",
-			wait: 20 * time.Millisecond,
+			wait: 200 * time.Millisecond,
 			calls: []testOp{
-				{delay: 10 * time.Millisecond},
-				{delay: 20 * time.Millisecond},
-				{delay: 30 * time.Millisecond},
-				{delay: 40 * time.Millisecond},
-				{delay: 50 * time.Millisecond},
-				{delay: 60 * time.Millisecond},
-				{delay: 70 * time.Millisecond},
+				{delay: 100 * time.Millisecond},
+				{delay: 200 * time.Millisecond},
+				{delay: 300 * time.Millisecond},
+				{delay: 400 * time.Millisecond},
+				{delay: 500 * time.Millisecond},
+				{delay: 600 * time.Millisecond},
+				{delay: 700 * time.Millisecond},
 			},
 			wantTriggers: map[time.Duration]int{
-				85 * time.Millisecond:  0,
-				95 * time.Millisecond:  1,
-				150 * time.Millisecond: 1,
+				850 * time.Millisecond: 0,
+				950 * time.Millisecond: 1,
+				// still 1 at at the end
+				1450 * time.Millisecond: 1,
 			},
 			wantFuncs: []int{6},
 		},
@@ -165,147 +169,147 @@ func TestNewMutableAndMaxWait(t *testing.T) {
 	}{
 		{
 			name:    "all within wait time",
-			wait:    20 * time.Millisecond,
-			maxwait: 50 * time.Millisecond,
+			wait:    200 * time.Millisecond,
+			maxwait: 500 * time.Millisecond,
 			calls: []testOp{
-				{delay: 0 * time.Millisecond},
-				{delay: 2 * time.Millisecond},
-				{delay: 4 * time.Millisecond},
-				{delay: 7 * time.Millisecond},
-				{delay: 10 * time.Millisecond},
-				{delay: 15 * time.Millisecond},
+				{delay: 0o0 * time.Millisecond},
+				{delay: 20 * time.Millisecond},
+				{delay: 40 * time.Millisecond},
+				{delay: 70 * time.Millisecond},
+				{delay: 100 * time.Millisecond},
+				{delay: 150 * time.Millisecond},
 			},
 			wantTriggers: map[time.Duration]int{
-				30 * time.Millisecond: 0,
-				// tick over at 35ms (15ms + 20ms)
-				40 * time.Millisecond: 1,
+				300 * time.Millisecond: 0,
+				// tick over at 350ms (150ms + 200ms)
+				400 * time.Millisecond: 1,
 				// still 1 at at the end
-				100 * time.Millisecond: 1,
+				900 * time.Millisecond: 1,
 			},
 			wantFuncs: []int{5},
 		},
 		{
 			name:    "until right before maxWait",
-			wait:    20 * time.Millisecond,
-			maxwait: 50 * time.Millisecond,
+			wait:    200 * time.Millisecond,
+			maxwait: 500 * time.Millisecond,
 			calls: []testOp{
-				{delay: 0 * time.Millisecond},
-				{delay: 10 * time.Millisecond},
-				{delay: 20 * time.Millisecond},
-				{delay: 30 * time.Millisecond},
-				{delay: 40 * time.Millisecond},
+				{delay: 0o0 * time.Millisecond},
+				{delay: 100 * time.Millisecond},
+				{delay: 200 * time.Millisecond},
+				{delay: 300 * time.Millisecond},
+				{delay: 400 * time.Millisecond},
 			},
 			wantTriggers: map[time.Duration]int{
-				45 * time.Millisecond: 0,
-				// tick over at 50ms via maxWait
-				55 * time.Millisecond: 1,
+				450 * time.Millisecond: 0,
+				// tick over at 500ms via maxWait
+				550 * time.Millisecond: 1,
 				// still 1 at at the end
-				100 * time.Millisecond: 1,
+				1050 * time.Millisecond: 1,
 			},
 			wantFuncs: []int{4},
 		},
 		{
 			name:    "until right after maxWait",
-			wait:    20 * time.Millisecond,
-			maxwait: 50 * time.Millisecond,
+			wait:    200 * time.Millisecond,
+			maxwait: 500 * time.Millisecond,
 			calls: []testOp{
-				{delay: 0 * time.Millisecond},
-				{delay: 10 * time.Millisecond},
-				{delay: 20 * time.Millisecond},
-				{delay: 30 * time.Millisecond},
-				{delay: 40 * time.Millisecond},
-				{delay: 60 * time.Millisecond},
+				{delay: 0o0 * time.Millisecond},
+				{delay: 100 * time.Millisecond},
+				{delay: 200 * time.Millisecond},
+				{delay: 300 * time.Millisecond},
+				{delay: 400 * time.Millisecond},
+				{delay: 600 * time.Millisecond},
 			},
 			wantTriggers: map[time.Duration]int{
-				45 * time.Millisecond: 0,
-				// tick over at 50ms via maxWait
-				55 * time.Millisecond: 1,
-				75 * time.Millisecond: 1,
-				// tick over at 80ms (60ms + 20ms)
-				85 * time.Millisecond: 2,
+				450 * time.Millisecond: 0,
+				// tick over at 500ms via maxWait
+				550 * time.Millisecond: 1,
+				750 * time.Millisecond: 1,
+				// tick over at 800ms (600ms + 200ms)
+				850 * time.Millisecond: 2,
 				// still 2 at at the end
-				150 * time.Millisecond: 2,
+				1350 * time.Millisecond: 2,
 			},
 			wantFuncs: []int{4, 5},
 		},
 		{
 			name:    "until two maxWaits and one wait expiry",
-			wait:    20 * time.Millisecond,
-			maxwait: 50 * time.Millisecond,
+			wait:    200 * time.Millisecond,
+			maxwait: 500 * time.Millisecond,
 			calls: []testOp{
-				{delay: 0 * time.Millisecond},
-				{delay: 10 * time.Millisecond},
-				{delay: 20 * time.Millisecond},
-				{delay: 30 * time.Millisecond},
-				{delay: 40 * time.Millisecond},
-				// maxWait triggers at 50ms (0ms + 50ms)
-				{delay: 52 * time.Millisecond},
-				{delay: 60 * time.Millisecond},
-				{delay: 70 * time.Millisecond},
-				{delay: 80 * time.Millisecond},
-				{delay: 90 * time.Millisecond},
-				// maxWait triggers at 102ms (52ms + 50ms)
-				{delay: 105 * time.Millisecond},
-				{delay: 110 * time.Millisecond},
+				{delay: 0o0 * time.Millisecond},
+				{delay: 100 * time.Millisecond},
+				{delay: 200 * time.Millisecond},
+				{delay: 300 * time.Millisecond},
+				{delay: 400 * time.Millisecond},
+				// maxWait triggers at 500ms (00ms + 500ms)
+				{delay: 520 * time.Millisecond},
+				{delay: 600 * time.Millisecond},
+				{delay: 700 * time.Millisecond},
+				{delay: 800 * time.Millisecond},
+				{delay: 900 * time.Millisecond},
+				// maxWait triggers at 1020ms (520ms + 500ms)
+				{delay: 1050 * time.Millisecond},
+				{delay: 1100 * time.Millisecond},
 			},
 			wantTriggers: map[time.Duration]int{
-				45 * time.Millisecond: 0,
-				// tick over at 50ms via maxWait
-				55 * time.Millisecond: 1,
-				95 * time.Millisecond: 1,
-				// tick over at 102ms via maxWait
-				105 * time.Millisecond: 2,
-				110 * time.Millisecond: 2,
-				115 * time.Millisecond: 2,
-				125 * time.Millisecond: 2,
-				// tick over at 130ms wait (110ms + 20ms)
-				135 * time.Millisecond: 3,
+				450 * time.Millisecond: 0,
+				// tick over at 500ms via maxWait
+				550 * time.Millisecond: 1,
+				950 * time.Millisecond: 1,
+				// tick over at 1020ms via maxWait
+				1050 * time.Millisecond: 2,
+				1100 * time.Millisecond: 2,
+				1150 * time.Millisecond: 2,
+				1250 * time.Millisecond: 2,
+				// tick over at 1300ms wait (1100ms + 200ms)
+				1350 * time.Millisecond: 3,
 				// still 3 at at the end
-				200 * time.Millisecond: 3,
+				1850 * time.Millisecond: 3,
 			},
 			wantFuncs: []int{4, 9, 11},
 		},
 		{
 			name:    "two maxWaits, on cancel, and one wait expiry",
-			wait:    20 * time.Millisecond,
-			maxwait: 50 * time.Millisecond,
+			wait:    200 * time.Millisecond,
+			maxwait: 500 * time.Millisecond,
 			calls: []testOp{
-				{delay: 0 * time.Millisecond},
-				{delay: 10 * time.Millisecond},
-				{delay: 20 * time.Millisecond},
-				{delay: 30 * time.Millisecond},
-				{delay: 40 * time.Millisecond},
+				{delay: 0o0 * time.Millisecond},
+				{delay: 100 * time.Millisecond},
+				{delay: 200 * time.Millisecond},
+				{delay: 300 * time.Millisecond},
+				{delay: 400 * time.Millisecond},
 				// maxWait triggers
-				{delay: 52 * time.Millisecond},
-				{delay: 60 * time.Millisecond},
-				{delay: 70 * time.Millisecond},
-				{delay: 80 * time.Millisecond},
-				{delay: 90 * time.Millisecond},
-				{delay: 95 * time.Millisecond, cancel: true},
+				{delay: 520 * time.Millisecond},
+				{delay: 600 * time.Millisecond},
+				{delay: 700 * time.Millisecond},
+				{delay: 800 * time.Millisecond},
+				{delay: 900 * time.Millisecond},
+				{delay: 950 * time.Millisecond, cancel: true},
 				// wait and maxWait are both canceled
-				{delay: 153 * time.Millisecond},
-				{delay: 160 * time.Millisecond},
-				{delay: 170 * time.Millisecond},
-				{delay: 180 * time.Millisecond},
-				{delay: 190 * time.Millisecond},
+				{delay: 1530 * time.Millisecond},
+				{delay: 1600 * time.Millisecond},
+				{delay: 1700 * time.Millisecond},
+				{delay: 1800 * time.Millisecond},
+				{delay: 1900 * time.Millisecond},
 				// maxWait triggers
-				{delay: 203 * time.Millisecond},
-				{delay: 210 * time.Millisecond},
+				{delay: 2030 * time.Millisecond},
+				{delay: 2100 * time.Millisecond},
 			},
 			wantTriggers: map[time.Duration]int{
-				45 * time.Millisecond: 0,
-				// tick over at 50ms via maxWait
-				55 * time.Millisecond:  1,
-				195 * time.Millisecond: 1,
-				// tick over at 100ms via maxWait
-				205 * time.Millisecond: 2,
-				210 * time.Millisecond: 2,
-				215 * time.Millisecond: 2,
-				225 * time.Millisecond: 2,
-				// tick over at 130ms (110ms + 20ms)
-				235 * time.Millisecond: 3,
+				450 * time.Millisecond: 0,
+				// tick over at 500ms via maxWait
+				550 * time.Millisecond:  1,
+				1950 * time.Millisecond: 1,
+				// tick over at 1000ms via maxWait
+				2050 * time.Millisecond: 2,
+				2100 * time.Millisecond: 2,
+				2150 * time.Millisecond: 2,
+				2250 * time.Millisecond: 2,
+				// tick over at 1300ms (1100ms + 200ms)
+				2350 * time.Millisecond: 3,
 				// still 3 at at the end
-				300 * time.Millisecond: 3,
+				2850 * time.Millisecond: 3,
 			},
 			wantFuncs: []int{4, 16, 17},
 		},
