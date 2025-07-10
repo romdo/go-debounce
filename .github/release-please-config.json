@@ -1,10 +1,10 @@
 {
   "release-type": "go",
+  "always-update": true,
   "bump-minor-pre-major": true,
   "bump-patch-for-minor-pre-major": true,
   "packages": {
     ".": {
-      "release-as": "0.1.0",
       "changelog-path": "CHANGELOG.md",
       "draft": false,
       "prerelease": false,
