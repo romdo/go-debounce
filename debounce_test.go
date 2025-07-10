@@ -33,16 +33,16 @@ func TestMain(m *testing.M) {
 }
 
 type testCase struct {
-	name            string
-	wait            time.Duration
-	options         []Option
-	actions         map[int64]testAction
-	callsLegacy     []testOp
-	calls           []int64
-	resets          []int64
-	wantInvocations []int64
-	assertMargin    int64
-	wantTriggers    map[time.Duration]int64
+	name               string
+	wait               time.Duration
+	options            []Option
+	actions            map[int64]testAction
+	legacyCalls        []testOp
+	calls              []int64
+	resets             []int64
+	wantInvocations    []int64
+	assertMargin       int64
+	legacyWantTriggers map[time.Duration]int64
 }
 
 type testOp struct {
@@ -120,7 +120,7 @@ func runTestCases(t *testing.T, tests []testCase) {
 					}(dur, action)
 				}
 			} else {
-				for _, op := range tt.callsLegacy {
+				for _, op := range tt.legacyCalls {
 					wg.Add(1)
 					go func(delay time.Duration, reset bool) {
 						defer wg.Done()
@@ -133,7 +133,7 @@ func runTestCases(t *testing.T, tests []testCase) {
 					}(op.delay, op.reset)
 				}
 
-				for delay, count := range tt.wantTriggers {
+				for delay, count := range tt.legacyWantTriggers {
 					wg.Add(1)
 					go func(interval time.Duration, count int64) {
 						defer wg.Done()
@@ -621,222 +621,111 @@ func TestNew_with_Leading_and_Trailing(t *testing.T) {
 			name:    "one call, one trigger",
 			wait:    200 * time.Millisecond,
 			options: []Option{Leading(), Trailing()},
-			actions: map[int64]testAction{
-				50:  {wantInvocs: 0},
-				100: {call: true},
-				150: {wantInvocs: 1}, // leading trigger at 100ms
+			calls: []int64{
+				100,
+			},
+			wantInvocations: []int64{
+				100, // Leading trigger at 100ms.
 			},
 		},
 		{
 			name:    "two calls, two triggers",
 			wait:    200 * time.Millisecond,
 			options: []Option{Leading(), Trailing()},
-			callsLegacy: []testOp{
-				{delay: 100 * time.Millisecond},
-				{delay: 400 * time.Millisecond},
+			calls: []int64{
+				100, 400,
 			},
-			wantTriggers: map[time.Duration]int64{
-				50 * time.Millisecond: 0,
-				// 100ms: call and leading trigger
-				150 * time.Millisecond: 1,
-				250 * time.Millisecond: 1,
-				// 300ms: wait from first call at 100ms expired, still 1
-				350 * time.Millisecond: 1,
-				// 400ms: call and leading trigger
-				450 * time.Millisecond: 2,
-				// still 2 at the end
-				950 * time.Millisecond: 2,
-			},
-			actions: map[int64]testAction{
-				50:  {wantInvocs: 0},
-				100: {call: true},
-				150: {wantInvocs: 1}, // leading trigger at 100ms
-
-				350: {wantInvocs: 1},
-				400: {call: true},
-				450: {wantInvocs: 2}, // leading trigger at 400ms
+			wantInvocations: []int64{
+				100, // Leading trigger at 100ms.
+				400, // Leading trigger at 400ms.
 			},
 		},
 		{
 			name:    "one burst of calls, two triggers",
 			wait:    200 * time.Millisecond,
 			options: []Option{Leading(), Trailing()},
-			actions: map[int64]testAction{
-				50:  {wantInvocs: 0},
-				100: {call: true},
-				150: {wantInvocs: 1}, // leading trigger at 100ms
-				151: {call: true},
-				200: {call: true},
-				250: {call: true},
-				300: {call: true},
-				350: {call: true},
-				400: {call: true},
-				450: {call: true},
-				500: {call: true},
-				650: {wantInvocs: 1},
-				750: {wantInvocs: 2}, // trailing trigger at 700ms
-			},
-		},
-		{
-			name:    "one burst of calls, two triggers ALT",
-			wait:    200 * time.Millisecond,
-			options: []Option{Leading(), Trailing()},
 			calls: []int64{
-				100, 150, 200, 250, 300, 350, 400, 450, 500,
+				100, 151, 200, 250, 300, 350, 400, 450, 500,
 			},
 			wantInvocations: []int64{
-				100, // leading trigger at 100ms
-				700, // trailing trigger from call at 500ms
+				100, // Leading trigger at 100ms.
+				700, // Trailing trigger from call at 500ms.
 			},
 		},
 		{
 			name:    "one burst of calls with a reset, three triggers",
 			wait:    200 * time.Millisecond,
 			options: []Option{Leading(), Trailing()},
-			callsLegacy: []testOp{
-				{delay: 100 * time.Millisecond}, // trigger 1
-				{delay: 150 * time.Millisecond},
-				{delay: 200 * time.Millisecond},
-				{delay: 250 * time.Millisecond},
-				{delay: 300 * time.Millisecond},
-				{delay: 350 * time.Millisecond},
-				{delay: 400 * time.Millisecond},
-				{delay: 450 * time.Millisecond, reset: true},
-				{delay: 500 * time.Millisecond}, // trigger 2
-				{delay: 550 * time.Millisecond},
-				{delay: 600 * time.Millisecond}, // trigger 3
+			calls: []int64{
+				100, 150, 200, 250, 300, 350, 400, 450, 500, 550, 600,
 			},
-			wantTriggers: map[time.Duration]int64{
-				50 * time.Millisecond: 0,
-				// 100ms: call and leading trigger
-				150 * time.Millisecond: 1,
-				// 450ms: reset
-				// 500ms: call and leading trigger
-				550 * time.Millisecond: 2,
-				750 * time.Millisecond: 2,
-				// 800ms: trailing trigger from call at 600ms
-				850 * time.Millisecond: 3,
-				// still 3 at the end
-				1350 * time.Millisecond: 3,
+			resets: []int64{
+				475,
+			},
+			wantInvocations: []int64{
+				100, // Leading trigger at 100ms.
+				500, // Leading trigger at 500ms.
+				800, // Trailing trigger from call at 600ms.
 			},
 		},
 		{
 			name:    "two close bursts of calls, three triggers",
 			wait:    200 * time.Millisecond,
 			options: []Option{Leading(), Trailing()},
-			callsLegacy: []testOp{
-				{delay: 100 * time.Millisecond}, // trigger 1
-				{delay: 150 * time.Millisecond},
-				{delay: 200 * time.Millisecond}, // trigger 2 delayed to 400ms
-
-				{delay: 500 * time.Millisecond}, // skipped, too close to 400ms
-				{delay: 550 * time.Millisecond},
-				{delay: 600 * time.Millisecond}, // trigger 3 at 800ms
+			calls: []int64{
+				100, 150, 200,
+				500, 550, 600,
 			},
-			wantTriggers: map[time.Duration]int64{
-				50 * time.Millisecond: 0,
-				// 100ms: call and leading trigger
-				150 * time.Millisecond: 1,
-				350 * time.Millisecond: 1,
-				// 400ms: trailing trigger from call at 200ms
-				450 * time.Millisecond: 2,
-				750 * time.Millisecond: 2,
-				// 800ms: trailing trigger from call at 600ms
-				850 * time.Millisecond: 3,
-				// still 3 at the end
-				1350 * time.Millisecond: 3,
+			wantInvocations: []int64{
+				100, // Leading trigger at 100ms.
+				400, // Trailing trigger from call at 200ms.
+				800, // Trailing trigger from call at 600ms.
 			},
 		},
 		{
 			name:    "two close bursts of calls, longer wait, two triggers",
 			wait:    400 * time.Millisecond,
 			options: []Option{Leading(), Trailing()},
-			callsLegacy: []testOp{
-				{delay: 100 * time.Millisecond}, // trigger 1
-				{delay: 150 * time.Millisecond},
-				{delay: 200 * time.Millisecond},
-
-				{delay: 500 * time.Millisecond},
-				{delay: 550 * time.Millisecond},
-				{delay: 600 * time.Millisecond}, // trigger 2
+			calls: []int64{
+				100, 150, 200,
+				500, 550, 600,
 			},
-			wantTriggers: map[time.Duration]int64{
-				50 * time.Millisecond: 0,
-				// 100ms: call and leading trigger
-				150 * time.Millisecond: 1,
-				350 * time.Millisecond: 1,
-				450 * time.Millisecond: 1,
-				950 * time.Millisecond: 1,
-				// 1000ms: trailing trigger from call at 600ms
-				1050 * time.Millisecond: 2,
-				// still 2 at the end
-				1550 * time.Millisecond: 2,
+			wantInvocations: []int64{
+				100,  // Leading trigger at 100ms.
+				1000, // Trailing trigger from call at 600ms.
 			},
 		},
 		{
 			name:    "two bursts of calls, four triggers",
 			wait:    200 * time.Millisecond,
 			options: []Option{Leading(), Trailing()},
-			callsLegacy: []testOp{
-				{delay: 100 * time.Millisecond}, // trigger 1
-				{delay: 150 * time.Millisecond},
-				{delay: 200 * time.Millisecond},
-				{delay: 250 * time.Millisecond},
-				{delay: 300 * time.Millisecond}, // trigger 2 delayed to 500ms
-
-				{delay: 800 * time.Millisecond}, // trigger 3
-				{delay: 850 * time.Millisecond},
-				{delay: 900 * time.Millisecond},
-				{delay: 950 * time.Millisecond},
-				{delay: 1000 * time.Millisecond}, // trigger 4 delayed to 1200ms
+			calls: []int64{
+				100, 150, 200, 250, 300,
+				800, 850, 900, 950, 1000,
 			},
-			wantTriggers: map[time.Duration]int64{
-				50 * time.Millisecond: 0,
-				// 100ms: call and leading trigger
-				150 * time.Millisecond: 1,
-				450 * time.Millisecond: 1,
-				// 500ms: trailing trigger from call at 300ms
-				550 * time.Millisecond: 2,
-				750 * time.Millisecond: 2,
-				// 800ms: call and leading trigger
-				850 * time.Millisecond:  3,
-				1150 * time.Millisecond: 3,
-				// 1200ms: trailing trigger from call at 800ms
-				1250 * time.Millisecond: 4,
-				// still 4 at the end
-				1750 * time.Millisecond: 4,
+			wantInvocations: []int64{
+				100,  // Leading trigger at 100ms.
+				500,  // Trailing trigger from call at 300ms.
+				800,  // Leading trigger at 800ms.
+				1200, // Trailing trigger from call at 1000ms.
 			},
 		},
 		{
 			name:    "two close bursts of calls, reset, four triggers",
 			wait:    200 * time.Millisecond,
 			options: []Option{Leading(), Trailing()},
-			callsLegacy: []testOp{
-				{delay: 100 * time.Millisecond}, // trigger 1
-				{delay: 150 * time.Millisecond},
-				{delay: 200 * time.Millisecond}, // trigger 2 delayed to 400ms
-
-				{delay: 450 * time.Millisecond, reset: true}, // reset
-
-				{delay: 500 * time.Millisecond}, // trigger 3
-				{delay: 550 * time.Millisecond},
-				{delay: 600 * time.Millisecond}, // trigger 4 at 800ms
+			calls: []int64{
+				100, 150, 200,
+				500, 550, 600,
 			},
-			wantTriggers: map[time.Duration]int64{
-				50 * time.Millisecond: 0,
-				// 100ms: call and leading trigger
-				150 * time.Millisecond: 1,
-				350 * time.Millisecond: 1,
-				// 400ms: trailing trigger from call at 200ms
-				450 * time.Millisecond: 2,
-				// 450ms: reset
-				// 500ms: call and leading trigger
-				550 * time.Millisecond: 3,
-				750 * time.Millisecond: 3,
-				// 800ms: trailing trigger from call at 600ms
-				850 * time.Millisecond: 4,
-				// still 4 at the end
-				1350 * time.Millisecond: 4,
+			resets: []int64{
+				450,
+			},
+			wantInvocations: []int64{
+				100, // Leading trigger at 100ms.
+				400, // Trailing trigger from call at 200ms.
+				500, // Leading trigger at 500ms.
+				800, // Trailing trigger from call at 600ms.
 			},
 		},
 	}
@@ -854,7 +743,7 @@ func TestNew_with_MaxWait(t *testing.T) {
 			options: []Option{
 				MaxWait(500 * time.Millisecond),
 			},
-			callsLegacy: []testOp{
+			legacyCalls: []testOp{
 				{delay: 0o0 * time.Millisecond},
 				{delay: 50 * time.Millisecond},
 				{delay: 70 * time.Millisecond},
@@ -862,7 +751,7 @@ func TestNew_with_MaxWait(t *testing.T) {
 				{delay: 150 * time.Millisecond},
 				{delay: 150 * time.Millisecond},
 			},
-			wantTriggers: map[time.Duration]int64{
+			legacyWantTriggers: map[time.Duration]int64{
 				300 * time.Millisecond: 0,
 				// tick over at 350ms (150ms + 200ms)
 				400 * time.Millisecond: 1,
@@ -876,14 +765,14 @@ func TestNew_with_MaxWait(t *testing.T) {
 			options: []Option{
 				MaxWait(500 * time.Millisecond),
 			},
-			callsLegacy: []testOp{
+			legacyCalls: []testOp{
 				{delay: 0o0 * time.Millisecond},
 				{delay: 100 * time.Millisecond},
 				{delay: 200 * time.Millisecond},
 				{delay: 300 * time.Millisecond},
 				{delay: 400 * time.Millisecond},
 			},
-			wantTriggers: map[time.Duration]int64{
+			legacyWantTriggers: map[time.Duration]int64{
 				450 * time.Millisecond: 0,
 				// tick over at 500ms via maxWait
 				550 * time.Millisecond: 1,
@@ -897,7 +786,7 @@ func TestNew_with_MaxWait(t *testing.T) {
 			options: []Option{
 				MaxWait(500 * time.Millisecond),
 			},
-			callsLegacy: []testOp{
+			legacyCalls: []testOp{
 				{delay: 0o0 * time.Millisecond},
 				{delay: 100 * time.Millisecond},
 				{delay: 200 * time.Millisecond},
@@ -905,7 +794,7 @@ func TestNew_with_MaxWait(t *testing.T) {
 				{delay: 400 * time.Millisecond},
 				{delay: 600 * time.Millisecond},
 			},
-			wantTriggers: map[time.Duration]int64{
+			legacyWantTriggers: map[time.Duration]int64{
 				450 * time.Millisecond: 0,
 				// tick over at 500ms via maxWait
 				550 * time.Millisecond: 1,
@@ -922,7 +811,7 @@ func TestNew_with_MaxWait(t *testing.T) {
 			options: []Option{
 				MaxWait(500 * time.Millisecond),
 			},
-			callsLegacy: []testOp{
+			legacyCalls: []testOp{
 				{delay: 0o0 * time.Millisecond},
 				{delay: 100 * time.Millisecond},
 				{delay: 200 * time.Millisecond},
@@ -940,7 +829,7 @@ func TestNew_with_MaxWait(t *testing.T) {
 				{delay: 1010 * time.Millisecond},
 				{delay: 1100 * time.Millisecond},
 			},
-			wantTriggers: map[time.Duration]int64{
+			legacyWantTriggers: map[time.Duration]int64{
 				450 * time.Millisecond: 0,
 				// tick over at 500ms via maxWait
 				550 * time.Millisecond: 1,
@@ -962,8 +851,8 @@ func TestNew_with_MaxWait(t *testing.T) {
 			options: []Option{
 				MaxWait(500 * time.Millisecond),
 			},
-			callsLegacy: []testOp{
-				{delay: 0o0 * time.Millisecond},
+			legacyCalls: []testOp{
+				{delay: 0 * time.Millisecond},
 				{delay: 100 * time.Millisecond},
 				{delay: 200 * time.Millisecond},
 				{delay: 300 * time.Millisecond},
@@ -987,7 +876,7 @@ func TestNew_with_MaxWait(t *testing.T) {
 				{delay: 2010 * time.Millisecond},
 				{delay: 2100 * time.Millisecond},
 			},
-			wantTriggers: map[time.Duration]int64{
+			legacyWantTriggers: map[time.Duration]int64{
 				450 * time.Millisecond: 0,
 				// tick over at 500ms via maxWait
 				550 * time.Millisecond:  1,
