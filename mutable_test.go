@@ -64,7 +64,7 @@ func TestNewMutable(t *testing.T) {
 				{delay: 100 * time.Millisecond}, // trigger 1
 				{delay: 350 * time.Millisecond},
 				{delay: 400 * time.Millisecond},
-				{delay: 500 * time.Millisecond, cancel: true},
+				{delay: 500 * time.Millisecond, reset: true},
 				{delay: 800 * time.Millisecond},
 				{delay: 900 * time.Millisecond},
 				{delay: 1000 * time.Millisecond}, // trigger 2
@@ -134,7 +134,7 @@ func TestNewMutable(t *testing.T) {
 							got = append(got, i)
 						})
 					}
-				}(op.delay, op.cancel)
+				}(op.delay, op.reset)
 			}
 
 			for interval, count := range tt.wantTriggers {
@@ -285,7 +285,7 @@ func TestNewMutableAndMaxWait(t *testing.T) {
 				{delay: 700 * time.Millisecond},
 				{delay: 800 * time.Millisecond},
 				{delay: 900 * time.Millisecond},
-				{delay: 950 * time.Millisecond, cancel: true},
+				{delay: 950 * time.Millisecond, reset: true},
 				// wait and maxWait are both canceled
 				{delay: 1530 * time.Millisecond},
 				{delay: 1600 * time.Millisecond},
@@ -344,7 +344,7 @@ func TestNewMutableAndMaxWait(t *testing.T) {
 							got = append(got, i)
 						})
 					}
-				}(op.delay, op.cancel)
+				}(op.delay, op.reset)
 			}
 
 			for interval, count := range tt.wantTriggers {

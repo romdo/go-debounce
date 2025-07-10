@@ -14,20 +14,23 @@ import (
 // New returns a debounced function that delays invoking f until after wait time
 // has elapsed since the last time the debounced function was invoked.
 //
-// The returned cancel function can be used to cancel any pending invocation of
-// f, but is not required to be called, so can be ignored if not needed.
+// The returned reset function can be used to reset the debounce, making it
+// operate as if it had never been called. Any pending invocation of f will be
+// discarded when reset is called.
 //
-// Both debounced and cancel functions are safe for concurrent use in
+// Both debounced and reset functions are safe for concurrent use in
 // goroutines, and can both be called multiple times.
 //
 // The debounced function does not wait for f to complete, so f needs to be
-// thread-safe as it may be invoked again before the previous invocation
-// completes.
+// concurrency-safe as it may be invoked again before the previous invocation
+// returns.
+//
+// If no options are provided, Trailing invocation is used by default.
 func New(
 	wait time.Duration,
 	f func(),
 	opts ...Option,
-) (debounced func(), cancel func()) {
+) (debounced func(), reset func()) {
 	conf := &Config{}
 	conf.Set(opts...)
 
