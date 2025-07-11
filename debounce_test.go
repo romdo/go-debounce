@@ -32,14 +32,13 @@ func TestMain(m *testing.M) {
 }
 
 type testCase struct {
-	name               string
-	wait               time.Duration
-	options            []Option
-	calls              []int64
-	resets             []int64
-	wantInvocations    []int64
-	assertMargin       int64
-	legacyWantTriggers map[time.Duration]int64
+	name            string
+	wait            time.Duration
+	options         []Option
+	calls           []int64
+	resets          []int64
+	wantInvocations []int64
+	assertMargin    int64
 }
 
 func runTestCases(t *testing.T, tests []testCase) {
@@ -87,7 +86,9 @@ func runTestCases(t *testing.T, tests []testCase) {
 
 			// Wait a bit of extra time just to try and make sure there's
 			// no lingering debounce left.
-			time.Sleep(tt.wait * 2)
+			time.Sleep(tt.wait * 3)
+			mux.Lock()
+			defer mux.Unlock()
 
 			assert.Len(t, invocations, len(tt.wantInvocations), "invocations")
 
@@ -230,7 +231,7 @@ func TestNew_with_Trailing(t *testing.T) {
 		{
 			name:    "one call, one trigger",
 			wait:    200 * time.Millisecond,
-			options: []Option{Trailing()},
+			options: []Option{WithTrailing()},
 			calls: []int64{
 				100,
 			},
@@ -241,7 +242,7 @@ func TestNew_with_Trailing(t *testing.T) {
 		{
 			name:    "two calls, two triggers",
 			wait:    200 * time.Millisecond,
-			options: []Option{Trailing()},
+			options: []Option{WithTrailing()},
 			calls: []int64{
 				100, 400,
 			},
@@ -253,7 +254,7 @@ func TestNew_with_Trailing(t *testing.T) {
 		{
 			name:    "one burst of calls, one triggers",
 			wait:    200 * time.Millisecond,
-			options: []Option{Trailing()},
+			options: []Option{WithTrailing()},
 			calls: []int64{
 				100, 150, 200, 250, 300, 350, 400, 450, 500,
 			},
@@ -264,7 +265,7 @@ func TestNew_with_Trailing(t *testing.T) {
 		{
 			name:    "one burst of calls with a reset, one trigger",
 			wait:    200 * time.Millisecond,
-			options: []Option{Trailing()},
+			options: []Option{WithTrailing()},
 			calls: []int64{
 				100, 150, 200, 250, 300, 350, 400,
 				500, 550, 600,
@@ -279,7 +280,7 @@ func TestNew_with_Trailing(t *testing.T) {
 		{
 			name:    "two close bursts of calls, two triggers",
 			wait:    200 * time.Millisecond,
-			options: []Option{Trailing()},
+			options: []Option{WithTrailing()},
 			calls: []int64{
 				100, 150, 200,
 				500, 550, 600,
@@ -292,7 +293,7 @@ func TestNew_with_Trailing(t *testing.T) {
 		{
 			name:    "two close bursts of calls, longer wait, one trigger",
 			wait:    400 * time.Millisecond,
-			options: []Option{Trailing()},
+			options: []Option{WithTrailing()},
 			calls: []int64{
 				100, 150, 200,
 				500, 550, 600,
@@ -304,7 +305,7 @@ func TestNew_with_Trailing(t *testing.T) {
 		{
 			name:    "two bursts of calls, two triggers",
 			wait:    200 * time.Millisecond,
-			options: []Option{Trailing()},
+			options: []Option{WithTrailing()},
 			calls: []int64{
 				100, 150, 200, 250, 300,
 				800, 850, 900, 950, 1000,
@@ -317,7 +318,7 @@ func TestNew_with_Trailing(t *testing.T) {
 		{
 			name:    "two close bursts of calls, reset, two triggers",
 			wait:    200 * time.Millisecond,
-			options: []Option{Trailing()},
+			options: []Option{WithTrailing()},
 			calls: []int64{
 				100, 150, 200,
 				500, 550, 600,
@@ -341,7 +342,7 @@ func TestNew_with_Leading(t *testing.T) {
 		{
 			name:    "one call, one trigger",
 			wait:    200 * time.Millisecond,
-			options: []Option{Leading()},
+			options: []Option{WithLeading()},
 			calls: []int64{
 				100,
 			},
@@ -352,7 +353,7 @@ func TestNew_with_Leading(t *testing.T) {
 		{
 			name:    "two calls, two triggers",
 			wait:    200 * time.Millisecond,
-			options: []Option{Leading()},
+			options: []Option{WithLeading()},
 			calls: []int64{
 				100, 400,
 			},
@@ -364,7 +365,7 @@ func TestNew_with_Leading(t *testing.T) {
 		{
 			name:    "one burst of calls, one trigger",
 			wait:    200 * time.Millisecond,
-			options: []Option{Leading()},
+			options: []Option{WithLeading()},
 			calls: []int64{
 				100, 151, 200, 250, 300, 350, 400, 450, 500,
 			},
@@ -375,7 +376,7 @@ func TestNew_with_Leading(t *testing.T) {
 		{
 			name:    "one burst of calls with a reset, two triggers",
 			wait:    200 * time.Millisecond,
-			options: []Option{Leading()},
+			options: []Option{WithLeading()},
 			calls: []int64{
 				100, 151, 200, 250, 300,
 				400, 451, 500, 550,
@@ -391,7 +392,7 @@ func TestNew_with_Leading(t *testing.T) {
 		{
 			name:    "two close bursts of calls, two triggers",
 			wait:    200 * time.Millisecond,
-			options: []Option{Leading()},
+			options: []Option{WithLeading()},
 			calls: []int64{
 				100, 151, 200,
 				500, 551, 600,
@@ -404,7 +405,7 @@ func TestNew_with_Leading(t *testing.T) {
 		{
 			name:    "two close bursts of calls, longer wait, one trigger",
 			wait:    500 * time.Millisecond,
-			options: []Option{Leading()},
+			options: []Option{WithLeading()},
 			calls: []int64{
 				100, 151, 200,
 				500, 551, 600,
@@ -416,7 +417,7 @@ func TestNew_with_Leading(t *testing.T) {
 		{
 			name:    "two bursts of calls, two triggers",
 			wait:    200 * time.Millisecond,
-			options: []Option{Leading()},
+			options: []Option{WithLeading()},
 			calls: []int64{
 				100, 151, 200, 250, 300,
 				600, 651, 700, 750, 800,
@@ -429,7 +430,7 @@ func TestNew_with_Leading(t *testing.T) {
 		{
 			name:    "two close bursts of calls, reset, two triggers",
 			wait:    500 * time.Millisecond,
-			options: []Option{Leading()},
+			options: []Option{WithLeading()},
 			calls: []int64{
 				100, 151, 200,
 				500, 551, 600,
@@ -453,7 +454,7 @@ func TestNew_with_Leading_and_Trailing(t *testing.T) {
 		{
 			name:    "one call, one trigger",
 			wait:    200 * time.Millisecond,
-			options: []Option{Leading(), Trailing()},
+			options: []Option{WithLeading(), WithTrailing()},
 			calls: []int64{
 				100,
 			},
@@ -464,7 +465,7 @@ func TestNew_with_Leading_and_Trailing(t *testing.T) {
 		{
 			name:    "two calls, two triggers",
 			wait:    200 * time.Millisecond,
-			options: []Option{Leading(), Trailing()},
+			options: []Option{WithLeading(), WithTrailing()},
 			calls: []int64{
 				100, 400,
 			},
@@ -476,7 +477,7 @@ func TestNew_with_Leading_and_Trailing(t *testing.T) {
 		{
 			name:    "one burst of calls, two triggers",
 			wait:    200 * time.Millisecond,
-			options: []Option{Leading(), Trailing()},
+			options: []Option{WithLeading(), WithTrailing()},
 			calls: []int64{
 				100, 151, 200, 250, 300, 350, 400, 450, 500,
 			},
@@ -488,7 +489,7 @@ func TestNew_with_Leading_and_Trailing(t *testing.T) {
 		{
 			name:    "one burst of calls with a reset, three triggers",
 			wait:    200 * time.Millisecond,
-			options: []Option{Leading(), Trailing()},
+			options: []Option{WithLeading(), WithTrailing()},
 			calls: []int64{
 				100, 150, 200, 250, 300, 350, 400, 450, 500, 550, 600,
 			},
@@ -504,7 +505,7 @@ func TestNew_with_Leading_and_Trailing(t *testing.T) {
 		{
 			name:    "two close bursts of calls, three triggers",
 			wait:    200 * time.Millisecond,
-			options: []Option{Leading(), Trailing()},
+			options: []Option{WithLeading(), WithTrailing()},
 			calls: []int64{
 				100, 150, 200,
 				500, 550, 600,
@@ -518,7 +519,7 @@ func TestNew_with_Leading_and_Trailing(t *testing.T) {
 		{
 			name:    "two close bursts of calls, longer wait, two triggers",
 			wait:    400 * time.Millisecond,
-			options: []Option{Leading(), Trailing()},
+			options: []Option{WithLeading(), WithTrailing()},
 			calls: []int64{
 				100, 150, 200,
 				500, 550, 600,
@@ -531,7 +532,7 @@ func TestNew_with_Leading_and_Trailing(t *testing.T) {
 		{
 			name:    "two bursts of calls, four triggers",
 			wait:    200 * time.Millisecond,
-			options: []Option{Leading(), Trailing()},
+			options: []Option{WithLeading(), WithTrailing()},
 			calls: []int64{
 				100, 150, 200, 250, 300,
 				800, 850, 900, 950, 1000,
@@ -546,7 +547,7 @@ func TestNew_with_Leading_and_Trailing(t *testing.T) {
 		{
 			name:    "two close bursts of calls, reset, four triggers",
 			wait:    200 * time.Millisecond,
-			options: []Option{Leading(), Trailing()},
+			options: []Option{WithLeading(), WithTrailing()},
 			calls: []int64{
 				100, 150, 200,
 				500, 550, 600,
@@ -574,7 +575,7 @@ func TestNew_with_MaxWait(t *testing.T) {
 			name: "one burst within wait time",
 			wait: 200 * time.Millisecond,
 			options: []Option{
-				MaxWait(500 * time.Millisecond),
+				WithMaxWait(500 * time.Millisecond),
 			},
 			calls: []int64{
 				0, 50, 70, 70, 150, 150,
@@ -587,7 +588,7 @@ func TestNew_with_MaxWait(t *testing.T) {
 			name: "one burst until right before maxWait",
 			wait: 200 * time.Millisecond,
 			options: []Option{
-				MaxWait(500 * time.Millisecond),
+				WithMaxWait(500 * time.Millisecond),
 			},
 			calls: []int64{
 				0, 50, 150, 250, 350, 450,
@@ -600,7 +601,7 @@ func TestNew_with_MaxWait(t *testing.T) {
 			name: "one burst until right after maxWait",
 			wait: 200 * time.Millisecond,
 			options: []Option{
-				MaxWait(500 * time.Millisecond),
+				WithMaxWait(500 * time.Millisecond),
 			},
 			calls: []int64{
 				0, 50, 150, 250, 350, 450, 550,
@@ -614,7 +615,7 @@ func TestNew_with_MaxWait(t *testing.T) {
 			name: "one burst across two maxWaits and one trailing trigger",
 			wait: 200 * time.Millisecond,
 			options: []Option{
-				MaxWait(500 * time.Millisecond),
+				WithMaxWait(500 * time.Millisecond),
 			},
 			calls: []int64{
 				0, 50, 150, 250, 350, 450, 550, 650, 750, 850, 950, 1050, 1150,
@@ -629,7 +630,7 @@ func TestNew_with_MaxWait(t *testing.T) {
 			name: "two bursts with a maxWait between them",
 			wait: 200 * time.Millisecond,
 			options: []Option{
-				MaxWait(500 * time.Millisecond),
+				WithMaxWait(500 * time.Millisecond),
 			},
 			calls: []int64{
 				0, 100, 200, 300, 400,
@@ -644,7 +645,7 @@ func TestNew_with_MaxWait(t *testing.T) {
 			name: "two bursts with maxWaits, reset, and trailing trigger",
 			wait: 200 * time.Millisecond,
 			options: []Option{
-				MaxWait(500 * time.Millisecond),
+				WithMaxWait(500 * time.Millisecond),
 			},
 			calls: []int64{
 				0, 50, 150, 250, 350, 450, 550, 650, 750, 850,
