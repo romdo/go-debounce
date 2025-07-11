@@ -594,7 +594,7 @@ func TestNew_with_MaxWait(t *testing.T) {
 				0, 50, 150, 250, 350, 450,
 			},
 			wantInvocations: []int64{
-				500, // MaxWait trigger via call at 0 milliseconds.
+				500, // Max wait trigger via call at 0 milliseconds.
 			},
 		},
 		{
@@ -607,7 +607,7 @@ func TestNew_with_MaxWait(t *testing.T) {
 				0, 50, 150, 250, 350, 450, 550,
 			},
 			wantInvocations: []int64{
-				500, // MaxWait trigger via call at 0 milliseconds.
+				500, // Max wait trigger via call at 0 milliseconds.
 				750, // Trailing trigger from call at 550 milliseconds.
 			},
 		},
@@ -621,8 +621,8 @@ func TestNew_with_MaxWait(t *testing.T) {
 				0, 50, 150, 250, 350, 450, 550, 650, 750, 850, 950, 1050, 1150,
 			},
 			wantInvocations: []int64{
-				500,  // MaxWait trigger via call at 0 milliseconds.
-				1050, // MaxWait trigger via call at 550 milliseconds.
+				500,  // Max wait trigger via call at 0 milliseconds.
+				1050, // Max wait trigger via call at 550 milliseconds.
 				1350, // Trailing trigger from call at 1150 milliseconds.
 			},
 		},
@@ -637,7 +637,7 @@ func TestNew_with_MaxWait(t *testing.T) {
 				600, 700, 800,
 			},
 			wantInvocations: []int64{
-				500,  // MaxWait trigger via call at 0 milliseconds.
+				500,  // Max wait trigger via call at 0 milliseconds.
 				1000, // Trailing trigger from call at 800 milliseconds.
 			},
 		},
@@ -655,8 +655,8 @@ func TestNew_with_MaxWait(t *testing.T) {
 				950,
 			},
 			wantInvocations: []int64{
-				500,  // MaxWait trigger via call at 0 milliseconds.
-				2050, // MaxWait trigger via call at 1550 milliseconds.
+				500,  // Max wait trigger via call at 0 milliseconds.
+				2050, // Max wait trigger via call at 1550 milliseconds.
 				2350, // Trailing trigger from call at 2150 milliseconds.
 			},
 		},
