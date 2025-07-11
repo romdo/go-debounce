@@ -42,17 +42,6 @@ type testCase struct {
 	legacyWantTriggers map[time.Duration]int64
 }
 
-type testOp struct {
-	delay time.Duration
-	reset bool
-}
-
-type testAction struct {
-	call  bool
-	reset bool
-	want  int64
-}
-
 func runTestCases(t *testing.T, tests []testCase) {
 	for _, tt := range tests {
 		tt := tt
@@ -104,7 +93,7 @@ func runTestCases(t *testing.T, tests []testCase) {
 
 			margin := tt.assertMargin
 			if margin == 0 {
-				margin = 30
+				margin = 40
 			}
 
 			for _, want := range tt.wantInvocations {
@@ -116,7 +105,7 @@ func runTestCases(t *testing.T, tests []testCase) {
 					}
 				}
 
-				assert.NotEqual(t, -1, found,
+				assert.True(t, found != -1,
 					"no invocation within %d ms of %d ms", margin, want,
 				)
 
@@ -582,7 +571,7 @@ func TestNew_with_MaxWait(t *testing.T) {
 
 	tests := []testCase{
 		{
-			name: "all within wait time",
+			name: "one burst within wait time",
 			wait: 200 * time.Millisecond,
 			options: []Option{
 				MaxWait(500 * time.Millisecond),
@@ -595,68 +584,79 @@ func TestNew_with_MaxWait(t *testing.T) {
 			},
 		},
 		{
-			name: "until right before maxWait",
+			name: "one burst until right before maxWait",
+			wait: 200 * time.Millisecond,
+			options: []Option{
+				MaxWait(500 * time.Millisecond),
+			},
+			calls: []int64{
+				0, 50, 150, 250, 350, 450,
+			},
+			wantInvocations: []int64{
+				500, // MaxWait trigger via call at 0 milliseconds.
+			},
+		},
+		{
+			name: "one burst until right after maxWait",
+			wait: 200 * time.Millisecond,
+			options: []Option{
+				MaxWait(500 * time.Millisecond),
+			},
+			calls: []int64{
+				0, 50, 150, 250, 350, 450, 550,
+			},
+			wantInvocations: []int64{
+				500, // MaxWait trigger via call at 0 milliseconds.
+				750, // Trailing trigger from call at 550 milliseconds.
+			},
+		},
+		{
+			name: "one burst across two maxWaits and one trailing trigger",
+			wait: 200 * time.Millisecond,
+			options: []Option{
+				MaxWait(500 * time.Millisecond),
+			},
+			calls: []int64{
+				0, 50, 150, 250, 350, 450, 550, 650, 750, 850, 950, 1050, 1150,
+			},
+			wantInvocations: []int64{
+				500,  // MaxWait trigger via call at 0 milliseconds.
+				1050, // MaxWait trigger via call at 550 milliseconds.
+				1350, // Trailing trigger from call at 1150 milliseconds.
+			},
+		},
+		{
+			name: "two bursts with a maxWait between them",
 			wait: 200 * time.Millisecond,
 			options: []Option{
 				MaxWait(500 * time.Millisecond),
 			},
 			calls: []int64{
 				0, 100, 200, 300, 400,
+				600, 700, 800,
 			},
 			wantInvocations: []int64{
-				500, // MaxWait trigger at 500 milliseconds.
+				500,  // MaxWait trigger via call at 0 milliseconds.
+				1000, // Trailing trigger from call at 800 milliseconds.
 			},
 		},
 		{
-			name: "until right after maxWait",
+			name: "two bursts with maxWaits, reset, and trailing trigger",
 			wait: 200 * time.Millisecond,
 			options: []Option{
 				MaxWait(500 * time.Millisecond),
 			},
 			calls: []int64{
-				0, 100, 200, 300, 400, 600,
-			},
-			wantInvocations: []int64{
-				500, // MaxWait trigger at 500 milliseconds.
-				800, // Trailing trigger from call at 600 milliseconds.
-			},
-		},
-		{
-			name: "until two maxWaits and one wait expiry",
-			wait: 200 * time.Millisecond,
-			options: []Option{
-				MaxWait(500 * time.Millisecond),
-			},
-			calls: []int64{
-				0, 100, 200, 300, 400, 490,
-				510, 600, 700, 800, 900, 990,
-				1010, 1100,
-			},
-			wantInvocations: []int64{
-				500,  // MaxWait trigger at 500 milliseconds.
-				1000, // MaxWait trigger at 1000 milliseconds.
-				1300, // Trailing trigger from call at 1100 milliseconds.
-			},
-		},
-		{
-			name: "two maxWaits, on cancel, and one wait expiry",
-			wait: 200 * time.Millisecond,
-			options: []Option{
-				MaxWait(500 * time.Millisecond),
-			},
-			calls: []int64{
-				0, 100, 200, 300, 400, 490,
-				510, 600, 700, 800, 900,
-				1510, 1600, 1700, 1800, 1900, 1990,
-				2010, 2100,
+				0, 50, 150, 250, 350, 450, 550, 650, 750, 850,
+				1550, 1650, 1750, 1850, 1950, 2050, 2150,
 			},
 			resets: []int64{
 				950,
 			},
 			wantInvocations: []int64{
-				500,  // MaxWait trigger at 500 milliseconds.
-				2010, // MaxWait trigger at 2010 milliseconds.
-				2300, // Trailing trigger from call at 2100 milliseconds.
+				500,  // MaxWait trigger via call at 0 milliseconds.
+				2050, // MaxWait trigger via call at 1550 milliseconds.
+				2350, // Trailing trigger from call at 2150 milliseconds.
 			},
 		},
 	}

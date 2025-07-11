@@ -8,6 +8,11 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+type testOp struct {
+	delay time.Duration
+	reset bool
+}
+
 func TestNewMutable(t *testing.T) {
 	t.Parallel()
 

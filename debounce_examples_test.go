@@ -33,10 +33,10 @@ func ExampleNew() {
 	// Hello, world!
 }
 
-func ExampleNew_with_cancel() {
+func ExampleNew_with_reset() {
 	// Create a new debouncer that will wait 100 milliseconds since the last
 	// call before calling the callback function.
-	debounced, cancel := debounce.New(100*time.Millisecond, func() {
+	debounced, reset := debounce.New(100*time.Millisecond, func() {
 		fmt.Println("Hello, world!")
 	})
 
@@ -51,8 +51,8 @@ func ExampleNew_with_cancel() {
 	time.Sleep(75 * time.Millisecond) // +75ms = 375ms
 	debounced()
 	time.Sleep(75 * time.Millisecond) // +75ms = 450ms
-	cancel()
-	time.Sleep(150 * time.Millisecond) // +150ms = 600ms, canceled at 450ms
+	reset()
+	time.Sleep(150 * time.Millisecond) // +150ms = 600ms, reset at 450ms
 
 	debounced()
 	time.Sleep(75 * time.Millisecond) // +75ms = 675ms
@@ -100,11 +100,11 @@ func ExampleNew_with_cancel() {
 // 	// Hello, world!
 // }
 
-// func ExampleNewWithMaxWait_with_cancel() {
+// func ExampleNewWithMaxWait_with_reset() {
 // 	// Create a new debouncer that will wait 100 milliseconds since the last
 // 	// call before calling the callback function. On repeated calls, it will
 // 	// wait no more than 500 milliseconds before calling the callback function.
-// 	debounced, cancel := debounce.New(
+// 	debounced, reset := debounce.New(
 // 		100*time.Millisecond,
 // 		func() { fmt.Println("Hello, world!") },
 // 		debounce.MaxWait(500*time.Millisecond),
@@ -122,8 +122,8 @@ func ExampleNew_with_cancel() {
 // 	time.Sleep(75 * time.Millisecond) // +75ms = 375ms
 // 	debounced()
 // 	time.Sleep(75 * time.Millisecond) // +75ms = 450ms
-// 	cancel()
-// 	time.Sleep(150 * time.Millisecond) // +150ms = 600ms, canceled at 450ms
+// 	reset()
+// 	time.Sleep(150 * time.Millisecond) // +150ms = 600ms, reset at 450ms
 // 	debounced()
 // 	time.Sleep(75 * time.Millisecond) // +75ms = 675ms
 // 	debounced()
