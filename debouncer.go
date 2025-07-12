@@ -129,8 +129,8 @@ func (d *Debouncer) timerCallback() {
 
 // invoke executes the function and updates the last invoke time.
 func (d *Debouncer) invoke(now time.Time) {
-	d.lastInvoke = now
 	if f := d.fn.Load(); f != nil && *f != nil {
+		d.lastInvoke = now
 		go (*f)()
 	}
 }
