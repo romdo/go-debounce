@@ -2,6 +2,7 @@ package debounce
 
 import (
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -11,12 +12,12 @@ import (
 type Debouncer struct {
 	// Configuration
 	wait     time.Duration
-	fn       func()
 	leading  bool
 	trailing bool
 	maxWait  time.Duration
 
 	// State
+	fn         atomic.Pointer[func()]
 	mux        sync.Mutex
 	dirty      bool
 	lastCall   time.Time
@@ -32,11 +33,7 @@ func NewDebouncer(
 	f func(),
 	opts ...Option,
 ) *Debouncer {
-	d := &Debouncer{
-		wait: wait,
-		fn:   f,
-	}
-
+	d := &Debouncer{wait: wait}
 	for _, opt := range opts {
 		opt(d)
 	}
@@ -51,7 +48,10 @@ func NewDebouncer(
 		d.maxWait = 0
 	}
 
-	// Initialize timers.
+	if f != nil {
+		d.fn.Store(&f)
+	}
+
 	d.timer = stoppedTimer(d.timerCallback)
 	d.maxTimer = stoppedTimer(d.timerCallback)
 
@@ -61,12 +61,21 @@ func NewDebouncer(
 // Debounce invokes the debounced function according to the configured options.
 // This method is safe for concurrent use.
 func (d *Debouncer) Debounce() {
+	d.DebounceWith(nil)
+}
+
+// DebounceWith allows setting a new function to be debounced and invoking it
+// according to the configured options. On repeated calls, the last passed
+// function wins and is executed. This method is safe for concurrent use.
+//
+// If f is nil, the debounced function is not modified from its current value.
+func (d *Debouncer) DebounceWith(f func()) {
+	if f != nil {
+		d.fn.Store(&f)
+	}
+
 	d.mux.Lock()
 	defer d.mux.Unlock()
-
-	if d.fn == nil {
-		return
-	}
 
 	if d.wait <= 0 {
 		d.invoke(time.Now())
@@ -101,10 +110,29 @@ func (d *Debouncer) Reset() {
 	d.timer.Stop()
 }
 
+// timerCallback is called when the timer expires.
+func (d *Debouncer) timerCallback() {
+	d.mux.Lock()
+	defer d.mux.Unlock()
+
+	if !d.dirty {
+		return
+	}
+
+	now := time.Now()
+
+	d.invoke(now)
+	d.timer.Stop()
+	d.maxTimer.Stop()
+	d.dirty = false
+}
+
 // invoke executes the function and updates the last invoke time.
 func (d *Debouncer) invoke(now time.Time) {
 	d.lastInvoke = now
-	go d.fn()
+	if f := d.fn.Load(); f != nil && *f != nil {
+		go (*f)()
+	}
 }
 
 // invokeLeading handles leading edge invocation logic.
@@ -126,21 +154,4 @@ func (d *Debouncer) invokeLeading(now time.Time) bool {
 	}
 
 	return false
-}
-
-// timerCallback is called when the timer expires.
-func (d *Debouncer) timerCallback() {
-	d.mux.Lock()
-	defer d.mux.Unlock()
-
-	if !d.dirty {
-		return
-	}
-
-	now := time.Now()
-
-	d.invoke(now)
-	d.timer.Stop()
-	d.maxTimer.Stop()
-	d.dirty = false
 }

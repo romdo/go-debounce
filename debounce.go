@@ -38,3 +38,34 @@ func New(
 
 	return d.Debounce, d.Reset
 }
+
+// NewMutable returns a debounced function that allows changing the debounced
+// function on each call. The returned function has the signature func(f func())
+// where f is the function to be debounced.
+//
+// On repeated calls, the last passed function wins and is executed. If the
+// passed function is nil, the debounced function is not modified from its
+// current value.
+//
+// This is useful when you need to debounce different functions based on
+// runtime conditions, and you want the most recent function to be executed
+// when the debounce period expires.
+//
+// The returned reset function can be used to reset the debounce, making it
+// operate as if it had never been called. Any pending invocation will be
+// discarded when reset is called.
+//
+// Both returned functions are safe for concurrent use in goroutines.
+//
+// If wait is zero or negative, each passed function is executed immediately
+// without debouncing.
+//
+// If no options are provided, Trailing() is used by default.
+func NewMutable(
+	wait time.Duration,
+	opts ...Option,
+) (debounced func(f func()), reset func()) {
+	d := NewDebouncer(wait, nil, opts...)
+
+	return d.DebounceWith, d.Reset
+}
