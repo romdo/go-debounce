@@ -14,19 +14,19 @@ import (
 // New returns a debounced function that delays invoking f until after wait time
 // has elapsed since the last time the debounced function was invoked.
 //
-// The returned reset function can be used to reset the debounce, making it
-// operate as if it had never been called. Any pending invocation of f will be
+// The returned reset function can be used to reset the debouncer, making it
+// operate as if it had never been called. Any pending invocations of f will be
 // discarded when reset is called.
 //
-// Both debounced and reset functions are safe for concurrent use in
-// goroutines, and can both be called multiple times.
+// Both debounced and reset functions are safe for concurrent use in goroutines,
+// and can both be called multiple times.
 //
 // The debounced function does not wait for f to complete, so f needs to be
 // concurrency-safe as it may be invoked again before the previous invocation
 // returns.
 //
-// If wait is zero or negative, the original function is returned as the
-// debounced function, and the reset function is a no-op.
+// If wait is zero or negative, calling debounced will invoke f immediately in a
+// separate goroutine and return immediately.
 //
 // If no options are provided, Trailing() is used by default.
 func New(
@@ -45,20 +45,18 @@ func New(
 //
 // On repeated calls, the last passed function wins and is executed. If the
 // passed function is nil, the debounced function is not modified from its
-// current value.
+// previous value. This is useful when you need to debounce different functions
+// based on runtime conditions.
 //
-// This is useful when you need to debounce different functions based on
-// runtime conditions, and you want the most recent function to be executed
-// when the debounce period expires.
-//
-// The returned reset function can be used to reset the debounce, making it
+// The returned reset function can be used to reset the debouncer, making it
 // operate as if it had never been called. Any pending invocation will be
 // discarded when reset is called.
 //
-// Both returned functions are safe for concurrent use in goroutines.
+// Both debounced and reset functions are safe for concurrent use in goroutines,
+// and can both be called multiple times.
 //
-// If wait is zero or negative, each passed function is executed immediately
-// without debouncing.
+// If wait is zero or negative, calling debounced will invoke the passed
+// function immediately in a separate goroutine and return immediately.
 //
 // If no options are provided, Trailing() is used by default.
 func NewMutable(

@@ -1,8 +1,8 @@
 package debounce
 
 import (
+	"fmt"
 	"sync"
-	"sync/atomic"
 	"time"
 )
 
@@ -12,12 +12,12 @@ import (
 type Debouncer struct {
 	// Configuration
 	wait     time.Duration
+	fn       func()
 	leading  bool
 	trailing bool
 	maxWait  time.Duration
 
 	// State
-	fn         atomic.Pointer[func()]
 	mux        sync.Mutex
 	dirty      bool
 	lastCall   time.Time
@@ -49,11 +49,17 @@ func NewDebouncer(
 	}
 
 	if f != nil {
-		d.fn.Store(&f)
+		d.fn = f
 	}
 
-	d.timer = stoppedTimer(d.timerCallback)
-	d.maxTimer = stoppedTimer(d.timerCallback)
+	d.timer = stoppedTimer(func() {
+		fmt.Println("trigger timer")
+		d.callback()
+	})
+	d.maxTimer = stoppedTimer(func() {
+		fmt.Println("trigger maxTimer")
+		d.callback()
+	})
 
 	return d
 }
@@ -70,12 +76,12 @@ func (d *Debouncer) Debounce() {
 //
 // If f is nil, the debounced function is not modified from its current value.
 func (d *Debouncer) DebounceWith(f func()) {
-	if f != nil {
-		d.fn.Store(&f)
-	}
-
 	d.mux.Lock()
 	defer d.mux.Unlock()
+
+	if f != nil {
+		d.fn = f
+	}
 
 	if d.wait <= 0 {
 		d.invoke(time.Now())
@@ -83,10 +89,28 @@ func (d *Debouncer) DebounceWith(f func()) {
 	}
 
 	now := time.Now()
-	invokedLeading := d.invokeLeading(now)
+	invokedLeading := false
 
-	if !invokedLeading && d.trailing {
-		d.timer.Reset(d.wait)
+	if d.leading {
+		elapsed := now.Sub(d.lastCall)
+		elapsedInvoke := now.Sub(d.lastInvoke)
+
+		exceededWait := d.lastCall.IsZero() ||
+			elapsed < 0 ||
+			elapsedInvoke < 0 ||
+			(elapsed >= d.wait && elapsedInvoke >= d.wait)
+
+		if exceededWait {
+			fmt.Println("trigger invoke from leading")
+			d.invoke(now)
+			invokedLeading = true
+		}
+	}
+
+	if !invokedLeading {
+		if d.trailing {
+			d.timer.Reset(d.wait)
+		}
 
 		if d.maxWait > 0 && !d.dirty {
 			d.maxTimer.Reset(d.maxWait)
@@ -103,15 +127,13 @@ func (d *Debouncer) Reset() {
 	d.mux.Lock()
 	defer d.mux.Unlock()
 
-	d.dirty = false
 	d.lastCall = time.Time{}
 	d.lastInvoke = time.Time{}
-	d.maxTimer.Stop()
-	d.timer.Stop()
+	d.clear()
 }
 
-// timerCallback is called when the timer expires.
-func (d *Debouncer) timerCallback() {
+// callback is called when timer or maxTimer expires.
+func (d *Debouncer) callback() {
 	d.mux.Lock()
 	defer d.mux.Unlock()
 
@@ -120,38 +142,24 @@ func (d *Debouncer) timerCallback() {
 	}
 
 	now := time.Now()
-
+	fmt.Println("trigger invoke from callback")
 	d.invoke(now)
-	d.timer.Stop()
-	d.maxTimer.Stop()
+	d.clear()
+}
+
+// clear stops and clears any pending debounces, without resetting last call and
+// invocation times. It should only be called while the mutex is already locked.
+func (d *Debouncer) clear() {
 	d.dirty = false
+	d.maxTimer.Stop()
+	d.timer.Stop()
 }
 
-// invoke executes the function and updates the last invoke time.
+// invoke executes the function and updates the last invoke time. It should only
+// be called while the mutex is already locked.
 func (d *Debouncer) invoke(now time.Time) {
-	if f := d.fn.Load(); f != nil && *f != nil {
+	if f := d.fn; f != nil {
 		d.lastInvoke = now
-		go (*f)()
+		go f()
 	}
-}
-
-// invokeLeading handles leading edge invocation logic.
-func (d *Debouncer) invokeLeading(now time.Time) bool {
-	if !d.leading {
-		return false
-	}
-
-	elapsed := now.Sub(d.lastCall)
-	elapsedInvoke := now.Sub(d.lastInvoke)
-	exceededWait := d.lastCall.IsZero() ||
-		elapsed < 0 || elapsedInvoke < 0 ||
-		(elapsed >= d.wait && elapsedInvoke >= d.wait)
-	exceededMaxWait := d.maxWait > 0 && elapsedInvoke >= d.maxWait
-
-	if exceededWait || exceededMaxWait {
-		d.invoke(now)
-		return true
-	}
-
-	return false
 }

@@ -6,6 +6,7 @@ import (
 	"math"
 	"os"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -151,6 +152,17 @@ func runTestCases(t *testing.T, tests []testCase) {
 
 func TestNew(t *testing.T) {
 	t.Parallel()
+
+	t.Run("returned functions are Debounce and Reset from *Debouncer",
+		func(t *testing.T) {
+			t.Parallel()
+			d := &Debouncer{}
+			debouncedFunc, resetFunc := New(d.wait, func() {})
+
+			assert.Equal(t, getFuncName(d.Debounce), getFuncName(debouncedFunc))
+			assert.Equal(t, getFuncName(d.Reset), getFuncName(resetFunc))
+		},
+	)
 
 	tests := []testCase{
 		{
@@ -829,6 +841,20 @@ func TestNew_withMaxWait(t *testing.T) {
 			},
 		},
 		{
+			name: "maxWait is slightly longer than wait duration",
+			wait: 200 * time.Millisecond,
+			options: []Option{
+				MaxWait(201 * time.Millisecond),
+			},
+			calls: []int64{
+				0, 100, 200, 300, 400,
+			},
+			want: []int64{
+				201, // Max wait trigger via call at 0 milliseconds.
+				600, // Trailing trigger from call at 400 milliseconds.
+			},
+		},
+		{
 			name: "one burst within wait time",
 			wait: 200 * time.Millisecond,
 			options: []Option{
@@ -920,4 +946,38 @@ func TestNew_withMaxWait(t *testing.T) {
 	}
 
 	runTestCases(t, tests)
+}
+
+func TestNewMutable(t *testing.T) {
+	t.Parallel()
+
+	t.Run("returned functions are DebounceWith and Reset from *Debouncer",
+		func(t *testing.T) {
+			t.Parallel()
+			d := &Debouncer{}
+			debouncedFunc, resetFunc := NewMutable(100 * time.Millisecond)
+
+			assert.Equal(t,
+				getFuncName(d.DebounceWith),
+				getFuncName(debouncedFunc),
+			)
+			assert.Equal(t, getFuncName(d.Reset), getFuncName(resetFunc))
+		},
+	)
+
+	t.Run("last function wins", func(t *testing.T) {
+		t.Parallel()
+
+		var target int32
+
+		debouncedFunc, _ := NewMutable(100 * time.Millisecond)
+
+		debouncedFunc(func() { atomic.AddInt32(&target, 1) })
+		debouncedFunc(func() { atomic.AddInt32(&target, 2) })
+		debouncedFunc(func() { atomic.AddInt32(&target, 4) })
+
+		time.Sleep(200 * time.Millisecond)
+
+		assert.Equal(t, int32(4), atomic.LoadInt32(&target))
+	})
 }

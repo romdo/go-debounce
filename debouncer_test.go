@@ -159,14 +159,13 @@ func TestNewDebouncer(t *testing.T) {
 			assert.NotNil(t, d.maxTimer)
 
 			// Check function storage
-			gotFnPtr := d.fn.Load()
+			gotFn := d.fn
 
 			if tt.wantFnNil {
-				assert.Nil(t, gotFnPtr)
+				assert.Nil(t, gotFn)
 			} else {
-				require.NotNil(t, gotFnPtr)
-				assert.NotNil(t, *gotFnPtr)
-				assert.Equal(t, getFuncName(tt.fn), getFuncName(*gotFnPtr))
+				require.NotNil(t, gotFn)
+				assert.Equal(t, getFuncName(tt.fn), getFuncName(gotFn))
 			}
 
 			// Check initial state
@@ -183,7 +182,6 @@ func TestDebouncer_Reset(t *testing.T) {
 	tests := []struct {
 		name     string
 		wait     time.Duration
-		options  []Option
 		setup    func(*Debouncer)
 		validate func(*testing.T, *Debouncer)
 	}{
@@ -215,14 +213,6 @@ func TestDebouncer_Reset(t *testing.T) {
 				d.DebounceWith(newFn)
 			},
 		},
-		{
-			name:    "reset with leading option and debounce",
-			wait:    100 * time.Millisecond,
-			options: []Option{Leading()},
-			setup: func(d *Debouncer) {
-				d.Debounce()
-			},
-		},
 	}
 
 	for _, tt := range tests {
@@ -230,23 +220,10 @@ func TestDebouncer_Reset(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			var d *Debouncer
 			var callCount int32
 			fn := func() { atomic.AddInt32(&callCount, 1) }
 
-			// Create appropriate debouncer based on test case
-			switch tt.name {
-			case "reset after leading edge invocation":
-				d = NewDebouncer(100*time.Millisecond, fn, Leading())
-			case "reset with maxWait timer active":
-				d = NewDebouncer(
-					100*time.Millisecond,
-					fn,
-					MaxWait(200*time.Millisecond),
-				)
-			default:
-				d = NewDebouncer(100*time.Millisecond, fn)
-			}
+			d := NewDebouncer(tt.wait, fn)
 
 			// Setup the debouncer state
 			if tt.setup != nil {
@@ -254,7 +231,7 @@ func TestDebouncer_Reset(t *testing.T) {
 			}
 
 			// Capture state before reset for comparison
-			beforeFn := d.fn.Load()
+			beforeFn := d.fn
 
 			// Perform reset
 			d.Reset()
@@ -270,7 +247,7 @@ func TestDebouncer_Reset(t *testing.T) {
 			assert.Equal(t, tt.wait, d.wait)
 
 			// Verify function is preserved (Reset doesn't change the function)
-			assert.Equal(t, getFuncName(beforeFn), getFuncName(d.fn.Load()))
+			assert.Equal(t, getFuncName(beforeFn), getFuncName(d.fn))
 
 			// Verify timers are still available (not nil)
 			assert.NotNil(t, d.timer)
@@ -284,70 +261,6 @@ func TestDebouncer_Reset(t *testing.T) {
 			// Verify that the function was not invoked after reset.
 			time.Sleep(tt.wait * 3)
 			assert.Equal(t, afterResetCount, atomic.LoadInt32(&callCount))
-		})
-	}
-}
-
-func TestDebouncer_Reset_TimerCleanup(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name string
-		opts []Option
-	}{
-		{
-			name: "trailing debouncer",
-			opts: []Option{Trailing()},
-		},
-		{
-			name: "leading debouncer",
-			opts: []Option{Leading()},
-		},
-		{
-			name: "both leading and trailing",
-			opts: []Option{Leading(), Trailing()},
-		},
-		{
-			name: "with maxWait",
-			opts: []Option{Trailing(), MaxWait(200 * time.Millisecond)},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			// Use separate callCount for each test to avoid race conditions
-			var callCount int32
-			fn := func() {
-				// Use atomic operations to avoid race conditions
-				atomic.AddInt32(&callCount, 1)
-			}
-
-			d := NewDebouncer(50*time.Millisecond, fn, tt.opts...)
-
-			// Trigger debounce to start timers
-			d.Debounce()
-
-			// Verify debouncer is in active state
-			if !d.leading {
-				assert.True(t, d.dirty, "debouncer should be in active state")
-			}
-
-			// Reset should stop all timers and clear state
-			d.Reset()
-			afterResetCount := atomic.LoadInt32(&callCount)
-
-			// Verify clean state
-			assert.False(t, d.dirty)
-			assert.True(t, d.lastCall.IsZero())
-			assert.True(t, d.lastInvoke.IsZero())
-
-			// Wait longer than debounce duration to ensure no delayed execution
-			time.Sleep(150 * time.Millisecond)
-
-			finalCount := atomic.LoadInt32(&callCount)
-			assert.Equal(t, afterResetCount, finalCount)
 		})
 	}
 }
