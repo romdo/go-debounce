@@ -1,8 +1,6 @@
 package debounce
 
 import (
-	"reflect"
-	"runtime"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -10,10 +8,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-func getFuncName(f any) string {
-	return runtime.FuncForPC(reflect.ValueOf(f).Pointer()).Name()
-}
 
 func TestNewDebouncer(t *testing.T) {
 	testFn := func() {}
@@ -156,7 +150,6 @@ func TestNewDebouncer(t *testing.T) {
 
 			// Check timer initialization
 			assert.NotNil(t, d.timer)
-			assert.NotNil(t, d.maxTimer)
 
 			// Check function storage
 			gotFn := d.fn
@@ -251,7 +244,6 @@ func TestDebouncer_Reset(t *testing.T) {
 
 			// Verify timers are still available (not nil)
 			assert.NotNil(t, d.timer)
-			assert.NotNil(t, d.maxTimer)
 
 			// Run additional validation if provided
 			if tt.validate != nil {

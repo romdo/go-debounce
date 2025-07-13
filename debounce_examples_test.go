@@ -400,7 +400,7 @@ func ExampleNewMutable_withMaxWait() {
 	time.Sleep(150 * time.Millisecond) // +150ms = 750ms, wait expired at 700ms
 
 	// Output:
-	// Hello, world! #7
+	// Hello, world! #8
 	// Hello, world! #9
 }
 
@@ -427,9 +427,9 @@ func ExampleNewMutable_withMaxWaitAndLeading() {
 	debounced(func() { fmt.Println("Hello, world! #6") })
 	time.Sleep(75 * time.Millisecond) // +75ms = 450ms
 	debounced(func() { fmt.Println("Hello, world! #7") })
-	time.Sleep(75 * time.Millisecond) // +75ms = 525ms
+	time.Sleep(75 * time.Millisecond) // +75ms = 525ms, maxWait expired at 500ms
 	debounced(func() { fmt.Println("Hello, world! #8") })
-	time.Sleep(75 * time.Millisecond) // +75ms = 600ms, maxWait expired at 575ms
+	time.Sleep(75 * time.Millisecond) // +75ms = 600ms
 	debounced(func() { fmt.Println("Hello, world! #9") })
 	time.Sleep(150 * time.Millisecond) // +150ms = 750ms, wait expired at 700ms
 
@@ -462,9 +462,9 @@ func ExampleNewMutable_withMaxWaitLeadingAndTrailing() {
 	debounced(func() { fmt.Println("Hello, world! #6") })
 	time.Sleep(75 * time.Millisecond) // +75ms = 450ms
 	debounced(func() { fmt.Println("Hello, world! #7") })
-	time.Sleep(75 * time.Millisecond) // +75ms = 525ms
+	time.Sleep(75 * time.Millisecond) // +75ms = 525ms, maxWait expired at 500ms
 	debounced(func() { fmt.Println("Hello, world! #8") })
-	time.Sleep(75 * time.Millisecond) // +75ms = 600ms, maxWait expired at 575ms
+	time.Sleep(75 * time.Millisecond) // +75ms = 600ms
 	debounced(func() { fmt.Println("Hello, world! #9") })
 	time.Sleep(50 * time.Millisecond) // +50ms = 650ms
 	debounced(func() { fmt.Println("Hello, world! #10") })

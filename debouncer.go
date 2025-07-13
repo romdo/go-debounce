@@ -1,7 +1,6 @@
 package debounce
 
 import (
-	"fmt"
 	"sync"
 	"time"
 )
@@ -20,9 +19,9 @@ type Debouncer struct {
 	// State
 	mux        sync.Mutex
 	dirty      bool
+	firstCall  time.Time
 	lastCall   time.Time
 	lastInvoke time.Time
-	maxTimer   *time.Timer
 	timer      *time.Timer
 }
 
@@ -52,14 +51,7 @@ func NewDebouncer(
 		d.fn = f
 	}
 
-	d.timer = stoppedTimer(func() {
-		fmt.Println("trigger timer")
-		d.callback()
-	})
-	d.maxTimer = stoppedTimer(func() {
-		fmt.Println("trigger maxTimer")
-		d.callback()
-	})
+	d.timer = stoppedTimer(d.callback)
 
 	return d
 }
@@ -83,42 +75,49 @@ func (d *Debouncer) DebounceWith(f func()) {
 		d.fn = f
 	}
 
+	now := time.Now()
+
 	if d.wait <= 0 {
-		d.invoke(time.Now())
+		d.invoke(now)
 		return
 	}
 
-	now := time.Now()
-	invokedLeading := false
-
-	if d.leading {
-		elapsed := now.Sub(d.lastCall)
-		elapsedInvoke := now.Sub(d.lastInvoke)
-
-		exceededWait := d.lastCall.IsZero() ||
-			elapsed < 0 ||
-			elapsedInvoke < 0 ||
-			(elapsed >= d.wait && elapsedInvoke >= d.wait)
-
-		if exceededWait {
-			fmt.Println("trigger invoke from leading")
-			d.invoke(now)
-			invokedLeading = true
-		}
-	}
-
-	if !invokedLeading {
-		if d.trailing {
-			d.timer.Reset(d.wait)
-		}
-
-		if d.maxWait > 0 && !d.dirty {
-			d.maxTimer.Reset(d.maxWait)
-		}
+	if d.shouldInvoke(now) {
+		d.invoke(now)
+	} else if d.trailing {
+		d.timer.Reset(d.wait)
 		d.dirty = true
 	}
 
 	d.lastCall = now
+}
+
+func (d *Debouncer) shouldInvoke(now time.Time) bool {
+	sinceLastCall := now.Sub(d.lastCall)
+	sinceLastInvoke := now.Sub(d.lastInvoke)
+	sinceMaxWaitOrigin := now.Sub(d.maxWaitOrigin(now))
+
+	exceededWait := d.lastCall.IsZero() ||
+		sinceLastCall < 0 || sinceLastInvoke < 0 ||
+		(sinceLastCall >= d.wait && sinceLastInvoke >= d.wait)
+	exceededMaxWait := d.maxWait > 0 &&
+		sinceMaxWaitOrigin >= d.maxWait
+
+	return (d.leading && exceededWait) || exceededMaxWait
+}
+
+// maxWaitOrigin returns the time of the first call or the last invocation. This
+// is used to determine if the maxWait has been exceeded.
+func (d *Debouncer) maxWaitOrigin(now time.Time) time.Time {
+	if d.firstCall.IsZero() {
+		d.firstCall = now
+	}
+
+	if d.lastInvoke.IsZero() {
+		return d.firstCall
+	}
+
+	return d.lastInvoke
 }
 
 // Reset resets the debouncer, discarding any pending invocation.
@@ -127,31 +126,30 @@ func (d *Debouncer) Reset() {
 	d.mux.Lock()
 	defer d.mux.Unlock()
 
+	d.firstCall = time.Time{}
 	d.lastCall = time.Time{}
 	d.lastInvoke = time.Time{}
 	d.clear()
 }
 
-// callback is called when timer or maxTimer expires.
+// callback is called when timer expires.
 func (d *Debouncer) callback() {
 	d.mux.Lock()
 	defer d.mux.Unlock()
 
+	// This is extremely unlikely, but should be checked.
 	if !d.dirty {
 		return
 	}
 
 	now := time.Now()
-	fmt.Println("trigger invoke from callback")
 	d.invoke(now)
-	d.clear()
 }
 
 // clear stops and clears any pending debounces, without resetting last call and
 // invocation times. It should only be called while the mutex is already locked.
 func (d *Debouncer) clear() {
 	d.dirty = false
-	d.maxTimer.Stop()
 	d.timer.Stop()
 }
 
@@ -162,4 +160,5 @@ func (d *Debouncer) invoke(now time.Time) {
 		d.lastInvoke = now
 		go f()
 	}
+	d.clear()
 }
