@@ -4,8 +4,7 @@
 
 <p align="center">
   <strong>
-    Go package that provides a number of debounce patterns as a set of easy to
-    use functions.
+    Go package providing a flexible set of debounce operations.
   </strong>
 </p>
 
@@ -24,34 +23,22 @@ is only executed after a certain amount of time has passed since the last call.
 
 Debouncing can be useful in scenarios where function calls may be triggered
 rapidly, such as in response to user input, but the underlying operation is
-expensive and only needs to be performed once per batch of calls.
+expensive and only needs to be performed once for each batch of calls.
 
-This package provides several debouncing functions, each with different
-characteristics:
+## Features
 
-- [`New`][1]: creates a new debounced function that will wait a fixed duration
-  before calling the original function, regardless of how many times the
-  debounced function is called in the meantime.
-- [`NewMutable`][3]: creates a new debounced function that will wait a fixed
-  duration before calling the last function that was passed to the debounced
-  function, regardless of how many times the debounced function is called in the
-  meantime. This allows the function to be changed dynamically.
-- [`NewWithMaxWait`][2]: creates a new debounced function that will wait a fixed
-  duration before calling the original function, but will also enforce a maximum
-  wait time, after which the function will be called regardless of whether new
-  calls have been made. This ensures that the function is not delayed
-  indefinitely if calls keep coming in.
-- [`NewMutableWithMaxWait`][4]: creates a new debounced function that combines
-  the characteristics of NewMutable and NewWithMaxWait, i.e., it will wait a
-  fixed duration before calling the last function that was passed to the
-  debounced function, but will also enforce a maximum wait time. All debouncing
-  functions are safe for concurrent use in goroutines and can be called multiple
-  times.
-
-[1]: https://pkg.go.dev/github.com/romdo/go-debounce#New
-[2]: https://pkg.go.dev/github.com/romdo/go-debounce#NewWithMaxWait
-[3]: https://pkg.go.dev/github.com/romdo/go-debounce#NewMutable
-[4]: https://pkg.go.dev/github.com/romdo/go-debounce#NewMutableWithMaxWait
+- Static debouncer where the function to invoke is specified up-front.
+- Mutable debouncer allowing you to change the underlying function to invoke at
+  every call to the debouncer.
+- Trailing invocation, where the function is invoked after no calls
+  for X period of time. This is the default behavior.
+- Leading invocation, where first call immediately invokes the function, but
+  subsequent calls within X time of a previous call do not trigger an
+  invocation. Can be combined with Trailing behavior.
+- Max wait invocation, forcing invocation at least every X time, even during
+  bursts of calls that keep delaying invocation. Without this, invocation could
+  in theory be blocked forever if the debouncer is always called before wait
+  time expires.
 
 ## Import
 

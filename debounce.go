@@ -8,103 +8,62 @@
 package debounce
 
 import (
-	"sync"
 	"time"
 )
 
 // New returns a debounced function that delays invoking f until after wait time
 // has elapsed since the last time the debounced function was invoked.
 //
-// The returned cancel function can be used to cancel any pending invocation of
-// f, but is not required to be called, so can be ignored if not needed.
+// The returned reset function can be used to reset the debouncer, making it
+// operate as if it had never been called. Any pending invocations of f will be
+// discarded when reset is called.
 //
-// Both debounced and cancel functions are safe for concurrent use in
-// goroutines, and can both be called multiple times.
+// Both debounced and reset functions are safe for concurrent use in goroutines,
+// and can both be called multiple times.
 //
 // The debounced function does not wait for f to complete, so f needs to be
-// thread-safe as it may be invoked again before the previous invocation
-// completes.
-func New(wait time.Duration, f func()) (debounced func(), cancel func()) {
-	var mux sync.Mutex
-	timer := stoppedTimer(f)
+// concurrency-safe as it may be invoked again before the previous invocation
+// returns.
+//
+// If wait is zero or negative, calling debounced will invoke f immediately in a
+// separate goroutine and return immediately.
+//
+// If no options are provided, Trailing() is used by default.
+func New(
+	wait time.Duration,
+	f func(),
+	opts ...Option,
+) (debounced func(), reset func()) {
+	d := NewDebouncer(wait, f, opts...)
 
-	debounced = func() {
-		mux.Lock()
-		defer mux.Unlock()
-
-		timer.Reset(wait)
-	}
-
-	cancel = func() {
-		mux.Lock()
-		defer mux.Unlock()
-
-		timer.Stop()
-	}
-
-	return debounced, cancel
+	return d.Debounce, d.Reset
 }
 
-// NewWithMaxWait returns a debounced function like New, but with a maximum wait
-// time of maxWait, which is the maximum time f is allowed to be delayed before
-// it is invoked.
+// NewMutable returns a debounced function that allows changing the debounced
+// function on each call. The returned function has the signature func(f func())
+// where f is the function to be debounced.
 //
-// The returned cancel function can be used to cancel any pending invocation of
-// f, but is not required to be called, so can be ignored if not needed.
+// On repeated calls, the last passed function wins and is executed. If the
+// passed function is nil, the debounced function is not modified from its
+// previous value. This is useful when you need to debounce different functions
+// based on runtime conditions.
 //
-// Both debounced and cancel functions are safe for concurrent use in
-// goroutines, and can both be called multiple times.
+// The returned reset function can be used to reset the debouncer, making it
+// operate as if it had never been called. Any pending invocation will be
+// discarded when reset is called.
 //
-// The debounced function does not wait for f to complete, so f needs to be
-// thread-safe as it may be invoked again before the previous invocation
-// completes.
-func NewWithMaxWait(
-	wait, maxWait time.Duration,
-	f func(),
-) (debounced func(), cancel func()) {
-	var mux sync.Mutex
-	var dirty bool
-	var timer *time.Timer
-	var maxTimer *time.Timer
+// Both debounced and reset functions are safe for concurrent use in goroutines,
+// and can both be called multiple times.
+//
+// If wait is zero or negative, calling debounced will invoke the passed
+// function immediately in a separate goroutine and return immediately.
+//
+// If no options are provided, Trailing() is used by default.
+func NewMutable(
+	wait time.Duration,
+	opts ...Option,
+) (debounced func(f func()), reset func()) {
+	d := NewDebouncer(wait, nil, opts...)
 
-	cb := func() {
-		mux.Lock()
-		defer mux.Unlock()
-
-		if !dirty {
-			return
-		}
-
-		go f()
-		timer.Stop()
-		maxTimer.Stop()
-		dirty = false
-	}
-
-	timer = stoppedTimer(cb)
-	maxTimer = stoppedTimer(cb)
-
-	debounced = func() {
-		mux.Lock()
-		defer mux.Unlock()
-
-		timer.Reset(wait)
-
-		// Mark as dirty, and start maxTimer if we were not already dirty.
-		if !dirty {
-			dirty = true
-			maxTimer.Reset(maxWait)
-		}
-	}
-
-	cancel = func() {
-		mux.Lock()
-		defer mux.Unlock()
-
-		timer.Stop()
-		maxTimer.Stop()
-		dirty = false
-	}
-
-	return debounced, cancel
+	return d.DebounceWith, d.Reset
 }

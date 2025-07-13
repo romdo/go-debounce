@@ -3,8 +3,12 @@ package debounce
 import (
 	"flag"
 	"fmt"
+	"math"
 	"os"
+	"reflect"
+	"runtime"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -31,365 +35,205 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-type testOp struct {
-	delay  time.Duration
-	cancel bool
+func getFuncName(f any) string {
+	return runtime.FuncForPC(reflect.ValueOf(f).Pointer()).Name()
 }
 
-func TestNew(t *testing.T) {
-	t.Parallel()
+type testCase struct {
+	name        string
+	mutable     bool
+	wait        time.Duration
+	options     []Option
+	calls       []int64
+	resets      []int64
+	want        []int64
+	wantMutable map[int64]int64
+	margin      int64
+}
 
-	tests := []struct {
-		name         string
-		wait         time.Duration
-		calls        []testOp
-		wantTriggers map[time.Duration]int
-	}{
-		{
-			name: "one call one trigger",
-			wait: 20 * time.Millisecond,
-			calls: []testOp{
-				{delay: 10 * time.Millisecond},
-			},
-			wantTriggers: map[time.Duration]int{
-				5 * time.Millisecond:   0,
-				15 * time.Millisecond:  0,
-				25 * time.Millisecond:  0,
-				35 * time.Millisecond:  1,
-				150 * time.Millisecond: 1,
-			},
-		},
-		{
-			name: "two calls two triggers",
-			wait: 20 * time.Millisecond,
-			calls: []testOp{
-				{delay: 10 * time.Millisecond},
-				{delay: 40 * time.Millisecond},
-			},
-			wantTriggers: map[time.Duration]int{
-				5 * time.Millisecond:  0,
-				15 * time.Millisecond: 0,
-				25 * time.Millisecond: 0,
-				// from first call at 10ms (+20ms wait = 30ms)
-				35 * time.Millisecond: 1,
-				55 * time.Millisecond: 1,
-				// from second call at 40ms (+20ms wait = 60ms)
-				65 * time.Millisecond:  2,
-				150 * time.Millisecond: 2,
-			},
-		},
-		{
-			name: "many calls two triggers",
-			wait: 20 * time.Millisecond,
-			calls: []testOp{
-				{delay: 5 * time.Millisecond},
-				{delay: 5 * time.Millisecond},
-				{delay: 10 * time.Millisecond}, // trigger 1
-				{delay: 35 * time.Millisecond},
-				{delay: 40 * time.Millisecond},
-				{delay: 45 * time.Millisecond},
-				{delay: 45 * time.Millisecond},
-				{delay: 50 * time.Millisecond}, // trigger 2
-			},
-			wantTriggers: map[time.Duration]int{
-				5 * time.Millisecond:  0,
-				15 * time.Millisecond: 0,
-				25 * time.Millisecond: 0,
-				// from call at 10ms (+20ms wait = 30ms)
-				35 * time.Millisecond: 1,
-				65 * time.Millisecond: 1,
-				// from call at 50ms (+20ms wait = 70ms)
-				75 * time.Millisecond:  2,
-				150 * time.Millisecond: 2,
-			},
-		},
-		{
-			name: "many calls, one cancel, two triggers",
-			wait: 20 * time.Millisecond,
-			calls: []testOp{
-				{delay: 5 * time.Millisecond},
-				{delay: 5 * time.Millisecond},
-				{delay: 10 * time.Millisecond}, // trigger 1
-				{delay: 35 * time.Millisecond},
-				{delay: 40 * time.Millisecond},
-				{delay: 50 * time.Millisecond, cancel: true},
-				{delay: 80 * time.Millisecond},
-				{delay: 90 * time.Millisecond},
-				{delay: 100 * time.Millisecond}, // trigger 2
-			},
-			wantTriggers: map[time.Duration]int{
-				5 * time.Millisecond:  0,
-				15 * time.Millisecond: 0,
-				25 * time.Millisecond: 0,
-				// from call at 10ms (+20ms wait = 30ms)
-				35 * time.Millisecond:  1,
-				115 * time.Millisecond: 1,
-				// call at 100ms (+20ms wait = 120ms)
-				125 * time.Millisecond: 2,
-				150 * time.Millisecond: 2,
-			},
-		},
-		{
-			name: "many triggers within wait time",
-			wait: 20 * time.Millisecond,
-			calls: []testOp{
-				{delay: 10 * time.Millisecond},
-				{delay: 20 * time.Millisecond},
-				{delay: 30 * time.Millisecond},
-				{delay: 40 * time.Millisecond},
-				{delay: 50 * time.Millisecond},
-				{delay: 60 * time.Millisecond},
-				{delay: 70 * time.Millisecond},
-			},
-			wantTriggers: map[time.Duration]int{
-				85 * time.Millisecond:  0,
-				95 * time.Millisecond:  1,
-				150 * time.Millisecond: 1,
-			},
-		},
-	}
+type invocation struct {
+	call int64
+	time time.Time
+	diff time.Duration
+}
+
+//nolint:gocyclo
+func runTestCases(t *testing.T, tests []testCase) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			mux := sync.RWMutex{}
+			var callCount int64 = -1
+			invocations := []*invocation{}
+			mux := sync.Mutex{}
 
-			n := 0
-			d, c := New(tt.wait, func() {
+			fn := func() {
 				mux.Lock()
 				defer mux.Unlock()
-				n++
-			})
 
-			wg := sync.WaitGroup{}
-			for _, op := range tt.calls {
-				wg.Add(1)
-				go func(delay time.Duration, cancel bool) {
-					defer wg.Done()
-					time.Sleep(delay)
-					if cancel {
-						c()
-					} else {
-						d()
-					}
-				}(op.delay, op.cancel)
+				invocations = append(invocations, &invocation{
+					call: atomic.LoadInt64(&callCount),
+					time: time.Now(),
+				})
+			}
+			mutableFn := func(i int64) func() {
+				return func() {
+					mux.Lock()
+					defer mux.Unlock()
+
+					invocations = append(invocations, &invocation{
+						call: i,
+						time: time.Now(),
+					})
+				}
 			}
 
-			for delay, count := range tt.wantTriggers {
-				wg.Add(1)
-				go func(interval time.Duration, count int) {
-					defer wg.Done()
-					time.Sleep(interval)
+			var mDeboucedFunc func(func())
+			var debouncedFunc func()
+			var resetFunc func()
+			if tt.mutable {
+				mDeboucedFunc, resetFunc = NewMutable(tt.wait, tt.options...)
+			} else {
+				debouncedFunc, resetFunc = New(tt.wait, fn, tt.options...)
+			}
+			wg := sync.WaitGroup{}
+			startTime := time.Now()
 
-					mux.RLock()
-					defer mux.RUnlock()
-					assert.Equal(t, count, n, "at %s", interval)
-				}(delay, count)
+			if tt.mutable {
+				for i, offset := range tt.calls {
+					i := i
+					wg.Add(1)
+					go func(i int64, x int64) {
+						defer wg.Done()
+						time.Sleep(time.Duration(x) * time.Millisecond)
+						mDeboucedFunc(mutableFn(i))
+					}(int64(i), offset)
+				}
+			} else {
+				for _, offset := range tt.calls {
+					wg.Add(1)
+					go func(x int64) {
+						defer wg.Done()
+						time.Sleep(time.Duration(x) * time.Millisecond)
+						atomic.AddInt64(&callCount, 1)
+						debouncedFunc()
+					}(offset)
+				}
+			}
+
+			for _, x := range tt.resets {
+				wg.Add(1)
+				go func(x int64) {
+					defer wg.Done()
+					time.Sleep(time.Duration(x) * time.Millisecond)
+					resetFunc()
+				}(x)
 			}
 
 			wg.Wait()
-		})
-	}
-}
 
-func TestNewWithMaxWait(t *testing.T) {
-	t.Parallel()
+			// Get the longest between wait and maxWait, and multiply by 3 to
+			// make sure there's no lingering debounce left.
+			d := &Debouncer{wait: tt.wait}
+			for _, opt := range tt.options {
+				opt(d)
+			}
+			maxDelay := time.Duration(
+				math.Max(float64(d.wait), float64(d.maxWait)),
+			)
+			// For tests with small wait durations, we want to make sure there's
+			// enough time for the debounce to trigger.
+			if maxDelay < 100*time.Millisecond {
+				maxDelay = 100 * time.Millisecond
+			}
+			time.Sleep(maxDelay * 3)
 
-	tests := []struct {
-		name         string
-		wait         time.Duration
-		maxwait      time.Duration
-		calls        []testOp
-		wantTriggers map[time.Duration]int
-	}{
-		{
-			name:    "all within wait time",
-			wait:    20 * time.Millisecond,
-			maxwait: 50 * time.Millisecond,
-			calls: []testOp{
-				{delay: 0 * time.Millisecond},
-				{delay: 5 * time.Millisecond},
-				{delay: 7 * time.Millisecond},
-				{delay: 7 * time.Millisecond},
-				{delay: 15 * time.Millisecond},
-				{delay: 15 * time.Millisecond},
-			},
-			wantTriggers: map[time.Duration]int{
-				30 * time.Millisecond: 0,
-				// tick over at 35ms (15ms + 20ms)
-				40 * time.Millisecond: 1,
-				// still 1 at at the end
-				100 * time.Millisecond: 1,
-			},
-		},
-		{
-			name:    "until right before maxWait",
-			wait:    20 * time.Millisecond,
-			maxwait: 50 * time.Millisecond,
-			calls: []testOp{
-				{delay: 0 * time.Millisecond},
-				{delay: 10 * time.Millisecond},
-				{delay: 20 * time.Millisecond},
-				{delay: 30 * time.Millisecond},
-				{delay: 40 * time.Millisecond},
-			},
-			wantTriggers: map[time.Duration]int{
-				45 * time.Millisecond: 0,
-				// tick over at 50ms via maxWait
-				55 * time.Millisecond: 1,
-				// still 1 at at the end
-				100 * time.Millisecond: 1,
-			},
-		},
-		{
-			name:    "until right after maxWait",
-			wait:    20 * time.Millisecond,
-			maxwait: 50 * time.Millisecond,
-			calls: []testOp{
-				{delay: 0 * time.Millisecond},
-				{delay: 10 * time.Millisecond},
-				{delay: 20 * time.Millisecond},
-				{delay: 30 * time.Millisecond},
-				{delay: 40 * time.Millisecond},
-				{delay: 60 * time.Millisecond},
-			},
-			wantTriggers: map[time.Duration]int{
-				45 * time.Millisecond: 0,
-				// tick over at 50ms via maxWait
-				55 * time.Millisecond: 1,
-				75 * time.Millisecond: 1,
-				// tick over at 80ms (60ms + 20ms)
-				85 * time.Millisecond: 2,
-				// still 2 at at the end
-				150 * time.Millisecond: 2,
-			},
-		},
-		{
-			name:    "until two maxWaits and one wait exipry",
-			wait:    20 * time.Millisecond,
-			maxwait: 50 * time.Millisecond,
-			calls: []testOp{
-				{delay: 0 * time.Millisecond},
-				{delay: 10 * time.Millisecond},
-				{delay: 20 * time.Millisecond},
-				{delay: 30 * time.Millisecond},
-				{delay: 40 * time.Millisecond},
-				{delay: 49 * time.Millisecond},
-				// maxWait triggers at 50ms (0ms + 50ms)
-				{delay: 51 * time.Millisecond},
-				{delay: 60 * time.Millisecond},
-				{delay: 70 * time.Millisecond},
-				{delay: 80 * time.Millisecond},
-				{delay: 90 * time.Millisecond},
-				{delay: 99 * time.Millisecond},
-				// maxWait triggers at 100ms (50ms + 50ms)
-				{delay: 101 * time.Millisecond},
-				{delay: 110 * time.Millisecond},
-			},
-			wantTriggers: map[time.Duration]int{
-				45 * time.Millisecond: 0,
-				// tick over at 50ms via maxWait
-				55 * time.Millisecond: 1,
-				95 * time.Millisecond: 1,
-				// tick over at 100ms via maxWait
-				105 * time.Millisecond: 2,
-				110 * time.Millisecond: 2,
-				115 * time.Millisecond: 2,
-				125 * time.Millisecond: 2,
-				// tick over at 130ms via wait (110ms + 20ms)
-				135 * time.Millisecond: 3,
-				// still 3 at at the end
-				200 * time.Millisecond: 3,
-			},
-		},
-		{
-			name:    "two maxWaits, on cancel, and one wait expiry",
-			wait:    20 * time.Millisecond,
-			maxwait: 50 * time.Millisecond,
-			calls: []testOp{
-				{delay: 0 * time.Millisecond},
-				{delay: 10 * time.Millisecond},
-				{delay: 20 * time.Millisecond},
-				{delay: 30 * time.Millisecond},
-				{delay: 40 * time.Millisecond},
-				{delay: 49 * time.Millisecond},
-				// maxWait triggers
-				{delay: 51 * time.Millisecond},
-				{delay: 60 * time.Millisecond},
-				{delay: 70 * time.Millisecond},
-				{delay: 80 * time.Millisecond},
-				{delay: 90 * time.Millisecond},
-				{delay: 95 * time.Millisecond, cancel: true},
-				// wait and maxWait are both canceled
-				{delay: 151 * time.Millisecond},
-				{delay: 160 * time.Millisecond},
-				{delay: 170 * time.Millisecond},
-				{delay: 180 * time.Millisecond},
-				{delay: 190 * time.Millisecond},
-				{delay: 199 * time.Millisecond},
-				// maxWait triggers
-				{delay: 201 * time.Millisecond},
-				{delay: 210 * time.Millisecond},
-			},
-			wantTriggers: map[time.Duration]int{
-				45 * time.Millisecond: 0,
-				// tick over at 50ms via maxWait
-				55 * time.Millisecond:  1,
-				195 * time.Millisecond: 1,
-				// tick over at 100ms via maxWait
-				205 * time.Millisecond: 2,
-				210 * time.Millisecond: 2,
-				215 * time.Millisecond: 2,
-				225 * time.Millisecond: 2,
-				// tick over at 130ms (110ms + 20ms)
-				235 * time.Millisecond: 3,
-				// still 3 at at the end
-				300 * time.Millisecond: 3,
-			},
-		},
-	}
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
+			mux.Lock()
+			defer mux.Unlock()
 
-			mux := sync.RWMutex{}
+			margin := time.Duration(tt.margin) * time.Millisecond
+			if margin == 0 {
+				margin = 40 * time.Millisecond
+			}
 
-			n := 0
-			d, c := NewWithMaxWait(tt.wait, tt.maxwait, func() {
-				mux.Lock()
-				defer mux.Unlock()
-				n++
-			})
+			for _, inv := range invocations {
+				inv.diff = inv.time.Sub(startTime).Abs()
+			}
 
-			wg := sync.WaitGroup{}
-			for _, op := range tt.calls {
-				wg.Add(1)
-				go func(delay time.Duration, cancel bool) {
-					defer wg.Done()
-					time.Sleep(delay)
-					if cancel {
-						c()
-					} else {
-						d()
+			assert.Len(t, invocations, len(tt.want)+len(tt.wantMutable))
+
+			if len(tt.want) > 0 {
+				for _, want := range tt.want {
+					// Find all invocations within the margin along with their
+					// offset from the desired invocation time.
+					wantTime := startTime.Add(
+						time.Duration(want) * time.Millisecond,
+					)
+
+					found := make(map[int]time.Duration)
+					for i, inv := range invocations {
+						if wantTime.Before(inv.time.Add(margin)) &&
+							wantTime.After(inv.time.Add(-margin)) {
+							found[i] = wantTime.Sub(inv.time).Abs()
+						}
 					}
-				}(op.delay, op.cancel)
+
+					assert.True(t, len(found) > 0,
+						"no invocation within %s of %dms", margin, want,
+					)
+
+					if len(found) > 0 {
+						// Determine the closest invocation.
+						closestIndex := -1
+						closestOffset := found[0]
+						for i, offset := range found {
+							if offset < closestOffset {
+								closestIndex = i
+								closestOffset = offset
+							}
+						}
+
+						// Remove the closest invocation.
+						if closestIndex != -1 {
+							invocations = append(
+								invocations[:closestIndex],
+								invocations[closestIndex+1:]...,
+							)
+						}
+					}
+				}
+			}
+			if len(tt.wantMutable) > 0 {
+				for i, want := range tt.wantMutable {
+					var inv *invocation
+					for _, v := range invocations {
+						if v.call == i {
+							inv = v
+							break
+						}
+					}
+
+					if !assert.NotNil(t, inv, "invocations[%d]", i) {
+						continue
+					}
+
+					wantTime := startTime.Add(
+						time.Duration(want) * time.Millisecond,
+					)
+
+					assert.WithinDuration(t,
+						wantTime,
+						inv.time,
+						margin,
+					)
+				}
 			}
 
-			for delay, count := range tt.wantTriggers {
-				wg.Add(1)
-				go func(interval time.Duration, count int) {
-					defer wg.Done()
-					time.Sleep(interval)
-
-					mux.RLock()
-					defer mux.RUnlock()
-					assert.Equal(t, count, n, "at %s", interval)
-				}(delay, count)
-			}
-
-			wg.Wait()
+			// NOTE: This is helpful when working on a failing test.
+			// if t.Failed() {
+			// 	spew.Dump(invocations)
+			// }
 		})
 	}
 }

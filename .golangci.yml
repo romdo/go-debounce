@@ -59,6 +59,8 @@ linters:
       tab-width: 4
     misspell:
       locale: US
+    nlreturn:
+      block-size: 2
   exclusions:
     generated: lax
     presets:
